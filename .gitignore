@@ -1,16 +1,26 @@
-# Data & large files
-data/raw/
-data/synthetic/
-*.mp4
-*.avi
-*.mov
-
 # Python
 __pycache__/
-*.pyc
+*.py[cod]
 .venv/
+
+# Environment
+.env
+
+# Raw / downloaded data
+data/raw/
+data/synthetic/
+
+# Generated features / large artifacts
+data/features/
+
+# Generated outputs
+outputs/
+
+# Jupyter
 .ipynb_checkpoints/
 
-# OS
+# OS / IDE
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/

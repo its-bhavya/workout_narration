@@ -1,0 +1,3 @@
+filename,exercise,split,rep_count,rep_boundaries,boundaries_valid,validation_reason,video_exists
+stu6_44.mp4,push_up,train,,[],False,missing_rep_count,True
+stu9_67.mp4,squat,valid,0.0,[],False,non_positive_rep_count,True
