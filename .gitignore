@@ -1,0 +1,16 @@
+# Data & large files
+data/raw/
+data/synthetic/
+*.mp4
+*.avi
+*.mov
+
+# Python
+__pycache__/
+*.pyc
+.venv/
+.ipynb_checkpoints/
+
+# OS
+.DS_Store
+Thumbs.db
