@@ -24,3 +24,6 @@ outputs/
 Thumbs.db
 .vscode/
 .idea/
+
+#MediaPipe model files 
+models/*.task
