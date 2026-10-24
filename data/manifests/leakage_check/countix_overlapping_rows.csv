@@ -1,0 +1,2 @@
+sample_id,video_id,split,class,exercise,kinetics_start,kinetics_end,repetition_start,repetition_end,count,source_path,download_status,video_key,exercise_key,comparison_class
+hdH-l5Tn4Nk_339,hdH-l5Tn4Nk,val,jumping jacks,jump_jack,7,17,7.0,13.131131,6,data\raw\countix\sources\hdH-l5Tn4Nk.mp4,downloaded,hdh-l5tn4nk,jump_jack,jump_jack
