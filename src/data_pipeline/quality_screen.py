@@ -1,19 +1,10 @@
 """
-Quality screening for RepCount videos and Countix segments using
-MediaPipe Pose Landmarker.
+Quality screening for RepCount videos using MediaPipe Pose Landmarker.
 
-RepCount (whole-video screening)
-    Each RepCount video is a single-exercise clip, so frames are sampled
-    across the entire video.
+Each RepCount video is a single-exercise clip, so frames are sampled
+across the entire video.
 
-Countix (segment-aware screening)
-    Countix source videos are ~10 s Kinetics windows that can contain
-    non-exercise footage (intros, cutaways, rest). Only the annotated
-    repetition segment [repetition_start, repetition_end] is the usable
-    footage, so frames are sampled ONLY inside that segment. Quality of
-    the rest of the source video is irrelevant and ignored.
-
-For each video / segment:
+For each video:
     - Check video readability, resolution, and rotation metadata
     - Sample frames
     - Run MediaPipe Pose Landmarker
