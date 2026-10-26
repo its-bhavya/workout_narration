@@ -15,3 +15,4 @@ Utility scripts:
 - `validate_pose.py`             — sanity-check pose extraction outputs
 - `inspect_rep_boundaries.py`    — visualize frame-level repetition annotations for a single video
 - `plot_features.py`             — plot extracted features for exploration
+- `verify_l_columns.py`          — contact-sheet PNGs of frames at each L-value for 6 random clips (2 per exercise); outputs to `outputs/l_check/`; run to confirm L-column semantics (start/bottom/pairs) by eye

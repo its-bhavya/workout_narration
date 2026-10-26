@@ -162,6 +162,9 @@ def report(df: pd.DataFrame) -> None:
 def main() -> None:
     df = pd.read_csv(QUALITY_SCREENING_PATH)
 
+    # RepCount-only splits (O1: Countix dropped)
+    df = df[df["source"] == "repcount"].copy()
+
     df = df[df["status"].isin(INCLUDE_STATUSES)].copy()
 
     logger.info("Clips included: %d", len(df))

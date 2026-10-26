@@ -6,16 +6,24 @@ readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
     "bgutil-ytdlp-pot-provider>=2.0.1",
+    "matplotlib>=3.11.2",
     "mediapipe>=1.0.1",
     "moviepy>=2.2.1",
     "numpy>=2.5.3",
     "opencv-python>=5.0.0.93",
     "openpyxl>=3.1.5",
     "pandas>=3.0.6",
+    "pyarrow>=26.0.0",
+    "scipy>=1.18.1",
     "yt-dlp[default]>=2026.8.19",
 ]
 
 [tool.uv.workspace]
 members = [
     "workout-narration",
+]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
 ]
