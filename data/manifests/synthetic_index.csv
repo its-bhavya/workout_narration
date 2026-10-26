@@ -1,0 +1,4 @@
+video_id,split,n_segments,duration_s,exercises,source_clips,transition_frame_share,direct_cuts,seed
+synth_train_0001,train,11,119.933,jump_jack|push_up|squat,stu1_25.mp4|stu6_62.mp4|stu5_18.mp4|val890.mp4|stu8_34.mp4,0.1576,0,42
+synth_val_0001,val,7,108.933,jump_jack|push_up,stu10_26.mp4|stu10_44.mp4|train1646.mp4,0.0474,1,42
+synth_test_0001,test,7,60.0,push_up|squat,test2326.mp4|stu2_52.mp4|test2309.mp4,0.4922,1,42
