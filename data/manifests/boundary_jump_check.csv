@@ -1,0 +1,5 @@
+# Section 1: boundary jump stats per split
+split,boundary_n,boundary_median,boundary_p90,clip_join_n,clip_join_median,clip_join_p90,random_n,random_median,random_p90,ratio_boundary_vs_random,ratio_clipjoin_vs_random
+test,6,5.89,129.296,2,129.296,166.942,70,4.394,13.918,1.341,29.427
+train,10,8.398,102.469,2,122.032,141.594,140,17.06,33.61,0.492,7.153
+val,6,2.164,82.536,1,99.385,99.385,70,8.574,34.418,0.252,11.591

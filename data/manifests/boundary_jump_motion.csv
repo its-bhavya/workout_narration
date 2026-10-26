@@ -1,0 +1,5 @@
+seg_type,exercise,n_segments,n_frames_total,mean_abs_jump
+exercise,jump_jack,5,3807,19.205
+exercise,push_up,3,2138,10.63
+exercise,squat,3,1113,20.586
+transition,transition,11,1588,14.586

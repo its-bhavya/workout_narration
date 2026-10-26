@@ -1,0 +1,4 @@
+video_id,split,n_frames,detection_rate,elapsed_s,n_groups,subject_jump_count,frac_nan_squat,longest_nan_s_squat,has_long_gap_squat,frac_nan_push_up,longest_nan_s_push_up,has_long_gap_push_up,frac_nan_jump_jack_arm,longest_nan_s_jump_jack_arm,has_long_gap_jump_jack_arm,frac_nan_jump_jack_leg,longest_nan_s_jump_jack_leg,has_long_gap_jump_jack_leg,status
+synth_test_0001,test,1800,0.8222222222222222,202.02,3,20,0.1196,0.7,False,,,False,,,False,,,False,success
+synth_train_0001,train,3598,0.9988882712618121,426.0,5,28,0.0,0.0,False,,,False,0.0365,0.133,False,0.0014,0.033,False,success
+synth_val_0001,val,3268,0.9746022031823746,426.42,3,9,,,False,,,False,0.0024,0.067,False,0.0,0.0,False,success
