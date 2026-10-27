@@ -16,6 +16,12 @@ Usage
     # all videos, 4 workers, force re-extraction
     python src/data_pipeline/extract_pose_features.py --all --workers 4 --force
 
+    # benchmark: time the first 3 videos with 4 workers, then exit
+    python src/data_pipeline/extract_pose_features.py --all --benchmark 3 --workers 4
+
+    # train+val only, process every 2nd frame, 4 workers
+    python src/data_pipeline/extract_pose_features.py --all --only-splits train,val --stride 2 --workers 4
+
     # use VIDEO mode (see pose_utils.py for tradeoff)
     python src/data_pipeline/extract_pose_features.py --all --mode video
 
@@ -32,6 +38,26 @@ continuous shot but will propagate stale tracking state for a few frames after
 each clip join, potentially creating an artificial pose at boundaries.  Since
 the whole pipeline is designed to be boundary-leakage-free (pose features only,
 no pixel info), VIDEO mode is not recommended for the synthetic stitched data.
+
+--stride N
+----------
+Process every Nth frame.  Skipped frames are not written to the CSV.
+Each emitted row keeps the real `frame` index and `time_s` from the source
+video so downstream code sees correct timestamps regardless of stride.
+Stride does not affect the resumability check — if the output CSV exists and
+is non-empty it is skipped as usual.
+
+--only-splits train,val
+-----------------------
+Comma-separated list of split names.  Only videos whose companion JSON has
+"split" matching one of the listed names are processed.  Useful for running
+train+val first and deferring the test set.
+
+--benchmark N
+-------------
+Process only the first N videos (after applying --only-splits), print
+seconds-per-video, then exit without updating the summary CSV.  Use this to
+estimate wall time before committing to the full run.
 """
 
 from __future__ import annotations
@@ -350,6 +376,7 @@ def extract_video_angles(
     model_path: Path,
     vis_thresh: float = 0.5,
     mode: str = "image",
+    stride: int = 1,
 ) -> dict:
     """Extract per-frame angles for a single synthetic video.
 
@@ -361,6 +388,9 @@ def extract_video_angles(
     model_path  : pose_landmarker_full.task
     vis_thresh  : landmarks below this visibility get NaN angles
     mode        : 'image' (default, stateless) or 'video'
+    stride      : process every Nth frame (default 1 = every frame).
+                  Skipped frames are not written; emitted rows keep real
+                  frame index and time_s from the source video.
 
     Returns
     -------
@@ -411,6 +441,12 @@ def extract_video_angles(
             ok, bgr = cap.read()
             if not ok:
                 break
+
+            # Skip frames that don't fall on the stride boundary.
+            # We still advance frame_idx so real frame numbers are preserved.
+            if frame_idx % stride != 0:
+                frame_idx += 1
+                continue
 
             ts_ms = round(frame_idx * 1000.0 / fps)
             if mode == "video":
@@ -501,7 +537,9 @@ def extract_video_angles(
     df.to_csv(output_csv, index=False)
 
     elapsed = time.perf_counter() - t0
-    detection_rate = n_detected / frame_idx if frame_idx > 0 else 0.0
+    n_frames_total = frame_idx  # total frames in video (including skipped)
+    n_frames_processed = len(rows)
+    detection_rate = n_detected / n_frames_processed if n_frames_processed > 0 else 0.0
 
     # -----------------------------------------------------------------------
     # Per-exercise NaN stats inside exercise segments
@@ -516,7 +554,9 @@ def extract_video_angles(
     summary_row: dict = {
         "video_id": video_id,
         "split": meta.get("split", ""),
-        "n_frames": frame_idx,
+        "n_frames": n_frames_total,
+        "n_frames_processed": n_frames_processed,
+        "stride": stride,
         "detection_rate": detection_rate,
         "elapsed_s": round(elapsed, 2),
         "n_groups": len([s for s in meta.get("segments", []) if s["type"] == "exercise"]),
@@ -588,7 +628,7 @@ def _longest_nan_run(arr: np.ndarray) -> int:
 
 def _worker(args: tuple) -> dict:
     """Top-level worker function (must be picklable -> module-level)."""
-    video_path, json_path, output_csv, model_path, vis_thresh, mode, force = args
+    video_path, json_path, output_csv, model_path, vis_thresh, mode, force, stride = args
 
     if not force and output_csv.exists():
         try:
@@ -602,7 +642,7 @@ def _worker(args: tuple) -> dict:
     try:
         summary = extract_video_angles(
             video_path, json_path, output_csv,
-            model_path, vis_thresh, mode,
+            model_path, vis_thresh, mode, stride,
         )
         summary["status"] = "success"
         log.info(
@@ -622,15 +662,31 @@ def _worker(args: tuple) -> dict:
 # CLI
 # ---------------------------------------------------------------------------
 
-def _collect_videos(synth_dir: Path) -> list[tuple[Path, Path]]:
-    """Return [(mp4_path, json_path)] for all synthetic videos."""
+def _collect_videos(
+    synth_dir: Path,
+    only_splits: set[str] | None = None,
+) -> list[tuple[Path, Path]]:
+    """Return [(mp4_path, json_path)] for all synthetic videos.
+
+    If only_splits is given, only videos whose companion JSON has a "split"
+    value in that set are included.
+    """
     pairs = []
     for mp4 in sorted(synth_dir.rglob("*.mp4")):
         j = mp4.with_suffix(".json")
-        if j.exists():
-            pairs.append((mp4, j))
-        else:
+        if not j.exists():
             log.warning("No companion JSON for %s – skipping", mp4)
+            continue
+        if only_splits is not None:
+            try:
+                with open(j) as fh:
+                    split_val = json.load(fh).get("split", "")
+                if split_val not in only_splits:
+                    continue
+            except Exception:
+                log.warning("Could not read split from %s – skipping", j)
+                continue
+        pairs.append((mp4, j))
     return pairs
 
 
@@ -655,10 +711,27 @@ def main() -> None:
                         help="Root of synthetic video tree (default: data/synthetic)")
     parser.add_argument("--features-dir", type=Path, default=FEATURES_DIR,
                         help="Root for angle CSV outputs (default: data/features)")
+    parser.add_argument("--stride", type=int, default=1, metavar="N",
+                        help="Process every Nth frame; skipped frames are omitted "
+                             "from the CSV but real frame/time_s values are preserved "
+                             "(default: 1 = every frame)")
+    parser.add_argument("--only-splits", type=str, default=None, metavar="SPLITS",
+                        help="Comma-separated split names to process, e.g. train,val. "
+                             "Videos whose JSON split field is not in this list are skipped.")
+    parser.add_argument("--benchmark", type=int, default=0, metavar="N",
+                        help="Process only the first N videos, print seconds/video, "
+                             "then exit without updating the summary CSV.")
     args = parser.parse_args()
+
+    if args.stride < 1:
+        raise SystemExit("--stride must be >= 1")
 
     if not MODEL_PATH.exists():
         raise SystemExit(f"Pose model not found: {MODEL_PATH}")
+
+    only_splits: set[str] | None = None
+    if args.only_splits:
+        only_splits = {s.strip() for s in args.only_splits.split(",")}
 
     if args.video:
         mp4 = args.video.resolve()
@@ -667,26 +740,83 @@ def main() -> None:
             raise SystemExit(f"No companion JSON found: {j}")
         pairs = [(mp4, j)]
     else:
-        pairs = _collect_videos(args.synth_dir)
+        pairs = _collect_videos(args.synth_dir, only_splits)
 
     if not pairs:
         raise SystemExit("No video/JSON pairs found.")
 
-    log.info("Processing %d video(s) with %d worker(s), mode=%s, vis_thresh=%.2f",
-             len(pairs), args.workers, args.mode, args.vis_thresh)
+    # Benchmark mode: cap to first N videos and force re-extraction so we
+    # always get a real timing measurement.
+    benchmark_mode = args.benchmark > 0
+    if benchmark_mode:
+        pairs = pairs[: args.benchmark]
+        log.info(
+            "BENCHMARK MODE: processing first %d video(s) with %d worker(s)",
+            len(pairs), args.workers,
+        )
+    else:
+        log.info(
+            "Processing %d video(s) with %d worker(s), mode=%s, "
+            "vis_thresh=%.2f, stride=%d",
+            len(pairs), args.workers, args.mode, args.vis_thresh, args.stride,
+        )
 
     work_items = []
     for mp4, js in pairs:
         video_id = mp4.stem
         output_csv = args.features_dir / f"{video_id}_angles.csv"
-        work_items.append((mp4, js, output_csv, MODEL_PATH,
-                           args.vis_thresh, args.mode, args.force))
+        force = args.force or benchmark_mode
+        work_items.append((
+            mp4, js, output_csv, MODEL_PATH,
+            args.vis_thresh, args.mode, force, args.stride,
+        ))
+
+    t_batch_start = time.perf_counter()
 
     if args.workers > 1:
         with mp.Pool(processes=args.workers) as pool:
             results = pool.map(_worker, work_items)
     else:
         results = [_worker(item) for item in work_items]
+
+    t_batch_elapsed = time.perf_counter() - t_batch_start
+
+    # -----------------------------------------------------------------------
+    # Benchmark report
+    # -----------------------------------------------------------------------
+    if benchmark_mode:
+        done = [r for r in results if r.get("status") == "success"]
+        if done:
+            individual = [r["elapsed_s"] for r in done]
+            # Total frames processed across all benchmark videos (after stride)
+            total_frames_processed = sum(r.get("n_frames_processed", 0) for r in done)
+            # Overall throughput = frames processed / wall time
+            fps_overall = total_frames_processed / t_batch_elapsed if t_batch_elapsed > 0 else 0.0
+
+            print(f"\n=== Benchmark ({len(done)} video(s), {args.workers} worker(s), stride={args.stride}) ===")
+            print(f"  Wall time total     : {t_batch_elapsed:.1f}s")
+            print(f"  Frames processed    : {total_frames_processed}")
+            print(f"  Overall fps         : {fps_overall:.2f} frames/s")
+            print(f"  CPU time/video      : min={min(individual):.1f}s  "
+                  f"mean={sum(individual)/len(individual):.1f}s  "
+                  f"max={max(individual):.1f}s")
+
+            # Full-run estimate: remaining frames / overall fps
+            all_pairs = _collect_videos(args.synth_dir, only_splits)
+            remaining_frames = 0
+            for mp4, js in all_pairs:
+                csv_out = args.features_dir / f"{mp4.stem}_angles.csv"
+                if not csv_out.exists():
+                    try:
+                        with open(js) as fh:
+                            n = json.load(fh).get("n_frames", 0)
+                        remaining_frames += math.ceil(n / args.stride)
+                    except Exception:
+                        pass
+            est_s = remaining_frames / fps_overall if fps_overall > 0 else float("inf")
+            print(f"\n  Full run estimate: {remaining_frames} remaining frames "
+                  f"-> ~{est_s/60:.0f} min at {fps_overall:.2f} fps")
+        return  # do not update summary CSV in benchmark mode
 
     # -----------------------------------------------------------------------
     # Write / update summary CSV
