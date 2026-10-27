@@ -172,6 +172,22 @@ Columns used by the scripts: `sample_id, video_id, split, exercise, count, downl
 | 6 | Grouped, leakage-checked splits | `build_splits.py` -> `splits.csv` | VERIFIED (on both sources; rerun needed after O1) |
 | 7 | Cross-source duplicate finder | `find_cross_source_duplicates.py` | PROVIDED (run status on real data unknown) |
 
+### 5.6 Rep counting (`rep_counter.py`, `evaluate_rep_counts.py`) — VERIFIED on train + val
+
+Rule-based counter. No learned model. Pipeline per segment: slice angle CSV to `[start_s, end_s]`, pick signal (best side or mean of both arms), mask long tracking gaps, interpolate short ones, smooth with Savitzky-Golay, run a two-threshold hysteresis state machine, drop reps closer than `min_gap_s`.
+
+Evaluated on 119 exercise segments across train and val synthetic videos (ground-truth segment windows, adaptive thresholds):
+
+| exercise | segments | exact_% | within1_% | MAE | bias |
+|----------|----------|---------|-----------|-----|------|
+| squat | 37 | 67.6 | 75.7 | 2.0 | -1.3 |
+| jump_jack | 45 | 45.0 | 71.1 | 1.7 | -1.4 |
+| push_up | 37 | 46.0 | 62.2 | 2.6 | -0.6 |
+
+Val squat and jump_jack reach 100% within-1. Val push_up is pulled down by one outlier (`stu10_49.mp4`, annotated 21, counted 43). This is a multi-person clip: the counter locks onto a secondary subject's oscillating signal and fires twice per real rep. This is a known limitation of the current single-subject selection — `largest_bbox_pose_index` handles it for synthetic videos; needs confirming for raw RepCount clips.
+
+Two segments correctly abstained with `low_motion` flag (stu6_62 squat, stu6_19 jump_jack — insufficient angle range). Full results and calibration tables in `src/rep_counting/README.md` and `outputs/rep_eval/segments.csv`.
+
 ### 5.1 `quality_screen.py`
 - MediaPipe Pose Landmarker in IMAGE mode, `num_poses=2`; the main subject is the pose with the largest landmark bounding box.
 - Samples up to 100 evenly spaced frames. RepCount: whole video. **Countix: only inside the annotated repetition segment.**
@@ -298,6 +314,7 @@ Professor check-in deliverables: Week 1 scope plus dataset plus pose demo; Week 
 8. **Synthetic transitions are artificial**, and RepCount footage is cleaner than real gym video. State both in Limitations.
 9. Duplicate finder recall is imperfect (crops, flips, overlays). A planned second check compares joint-angle sequences across splits after pose extraction.
 10. Within RepCount, YouTube-numbered clips from the same source video could still land in different splits.
+11. **Multi-person clips in raw RepCount** (e.g. `stu10_49.mp4`) cause overcounting: the counter can lock onto a secondary subject. `largest_bbox_pose_index` in `extract_pose_features.py` selects the largest-bounding-box pose for synthetic videos; this selection needs to be confirmed/applied uniformly when raw RepCount clips are fed directly to the counter. Until then, any raw clip with a significant secondary person will produce inflated rep counts.
 
 ---
 

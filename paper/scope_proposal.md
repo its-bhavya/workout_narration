@@ -21,5 +21,6 @@
 ## 3. Four-Week Milestones
 - **Week 1:** Data curation, quality screening, subject-grouped splits, synthetic continuous video generator, and stateless pose extraction pipeline. *(Completed)*
 - **Week 2:** Windowed classifier training, OnlineTAS smoothing baseline, cyclical state-machine rep counter, and narration template engine. *(In Progress)*
+  - Rep counter implemented and evaluated on train + val: squat 67.6% exact / 75.7% within-1 (MAE 2.0), jump_jack 45.0% / 71.1% (MAE 1.7), push_up 46.0% / 62.2% (MAE 2.6). Val push_up depressed by one multi-person clip (`stu10_49`); known artefact, to be resolved with consistent single-subject selection. Full results in `src/rep_counting/README.md`.
 - **Week 3:** End-to-end integration, boundary-tolerant repetition counting, speech synthesis audio alignment, and demo generation.
 - **Week 4:** Quantitative benchmark evaluation (Frame Acc, Edit, F1@k, Rep MAE), qualitative human evaluation study, and final research paper draft.

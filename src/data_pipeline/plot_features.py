@@ -39,6 +39,38 @@ PILOT_VIDEOS = {
             "right_arm_direction_deg",
         ],
     },
+    "stu3_43.mp4": {
+        "title": "Push-up (train, 45 reps)",
+        "features": [
+            "left_elbow_angle_deg",
+            "right_elbow_angle_deg",
+            "left_body_alignment_angle_deg",
+        ],
+    },
+    "stu6_41.mp4": {
+        "title": "Push-up (train, 54 reps)",
+        "features": [
+            "left_elbow_angle_deg",
+            "right_elbow_angle_deg",
+            "left_body_alignment_angle_deg",
+        ],
+    },
+    "stu9_50.mp4": {
+        "title": "Push-up (train, 65 reps)",
+        "features": [
+            "left_elbow_angle_deg",
+            "right_elbow_angle_deg",
+            "left_body_alignment_angle_deg",
+        ],
+    },
+    "stu10_49.mp4": {
+        "title": "Push-up (val, 21 reps)",
+        "features": [
+            "left_elbow_angle_deg",
+            "right_elbow_angle_deg",
+            "left_body_alignment_angle_deg",
+        ],
+    },
 }
 
 
