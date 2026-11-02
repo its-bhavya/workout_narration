@@ -246,6 +246,8 @@ Observation: Countix is noisier than RepCount, especially squat (about 26% quali
 | D9 | Detection threshold 0.65, p10 visibility 0.50 | see 5.2 |
 | D10 | Screening only measures; thresholds applied separately | pick cutoffs from distributions |
 | D11 | `uv` for dependencies; Colab plus shared Drive for compute and video storage | team setup |
+| D12 | Segmentation window = 2.0 s, stride = 1.0 s (50 % overlap) | 2 s captures a full rep at typical pace; 50 % overlap provides dense coverage without excessive redundancy; tuned on val, never on test |
+| D13 | Smoothing tau = 0.5 (chosen by val grid search over {0.4, 0.5, 0.6, 0.7}), min_len = 2 (grid {1,2,3,4}) | val grid-search maximising Edit score, tie-broken by frame accuracy; written to `outputs/segmentation/chosen_params.json` |
 
 ### Open decisions
 - **O1. Keep Countix?** Leaning toward dropping it. RepCount alone gives about 340 usable clips (109 jump_jack, 114 push_up, 117 squat); expected splits at 65/10/25 are roughly train 71/74/76, val 11/11/12, test 27/28/29. Test is about 10 to 15 independent subject groups, so report group counts and intervals, consider grouped 5-fold cross-validation for final numbers, and state "in-the-wild testing" as future work. Dropping it removes the duplicate problem entirely. To apply: filter `df = df[df["source"] == "repcount"]` in `build_splits.py`. Countix screening results stay available as a later extra pool.
@@ -345,4 +347,5 @@ Related Work groups (details in the team's literature review CSVs): temporal act
 | `apply_quality_thresholds.py` | pass / review / fail manifest | `DEFAULT_THRESHOLDS`, `EXERCISE_OVERRIDES`, `REVIEW_RELATIVE_TIME_MODE` |
 | `build_splits.py` | grouped 65/10/25 splits | `SPLIT_FRACTIONS`, `SEED`, `REPCOUNT_YOUTUBE_MAP_PATH`, `EXCLUDE_CLIPS_PATH` |
 | `find_cross_source_duplicates.py` | find RepCount/Countix duplicates | `MAX_HAMMING`, `HIGH_SCORE`, `REVIEW_SCORE`, `FRAMES_PER_CLIP` |
-| concatenation, pose extraction, segmentation, rep counting, narration, evaluation | NOT STARTED | see section 7 |
+| 8 | Segmentation pipeline: `make_windows.py` → `train.py` → `evaluate.py`, orchestrated by `run_all.py` | `outputs/segmentation/windows.csv`, `rf_model.joblib`, `window_predictions_{val,test}.csv`, `results.csv`, `test_segments.json`, `chosen_params.json`, `timeline_example.png`, `runs_log.csv` | **VERIFIED** on the synthetic dataset only (val ≈ stu10; test ≈ stu2/stu4; tau and min_len chosen by val grid search, never touching test). See `src/segmentation/README.md` Known Limitations for boundary fuzziness, jump_jack NaN rates, and coverage gaps. |
+| narration, evaluation | NOT STARTED | see section 7 |

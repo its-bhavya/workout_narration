@@ -4,100 +4,184 @@ Owned by: Bhavya (Role 1)
 Sliding-window classifier + smoothing + raw-vs-smoothed evaluation. Classes are
 exactly `squat`, `push_up`, `jump_jack`, `transition`.
 
-## Input
+---
 
-`data/features/<video_id>_angles.csv` produced by
-`src/data_pipeline/extract_pose_features.py` (synthetic videos, `--stride 2`).
-**Do not use** `data/features/repcount/derived/*.parquet` — those are per-clip,
-exercise-specific columns and leak the label.
+## How to run
 
-Windows are built from `time_s`, never from row counts (stride 2 makes row index
-unreliable as a timeline). Each video's split comes from its boundary JSON
-`"split"` field — never tuned on test.
+All commands from the **repo root**.
 
-## Scripts
-
-All run from the repo root. Import convention: bare imports within the package
-(no `src.segmentation` package path), matching `src/data_pipeline`. Tests add
-the package dir to `sys.path` the same way `tests/test_pose_utils.py` does.
-
-### `config.py`
-All parameters live here (`SEED = 42`): `WINDOW_S`, `STRIDE_S`,
-`MIN_PURITY_TRAIN`, `MIN_ROWS_FRAC`, `CLASSES`, `FEATURE_CHANNELS`, and path
-constants. `feature_columns(header)` resolves the base channels plus each
-`<channel>_3d` variant when that column exists in the CSV header.
-
-`FEATURE_CHANNELS` is the **allow-list**: only these columns may be model
-features. Everything else is metadata and MUST be excluded — `seg_label`,
-`seg_type`, `subject_jump`, `n_poses`, `pose_detected`, `frame`, `time_s`, and
-any `*_vis` column. The classifier builds its matrix from `feature_columns()`
-and nothing else.
-
-### `make_windows.py`
-```
-python src/segmentation/make_windows.py
-```
-Slides `[t, t+WINDOW_S)` windows over `time_s` (step `STRIDE_S`), drops the
-final partial window and windows below `MIN_ROWS_FRAC` of the expected row
-count, labels each window by the majority `seg_label` (purity = its share of
-rows; ties broken by `CLASSES` order). Reads the split from each video's JSON.
-Writes `outputs/segmentation/windows.csv`:
-
-`video_id, split, win_idx, t_start, t_end, t_center, label, purity, row_start, row_end`
-(`row_end` is slice-style exclusive: `df.iloc[row_start:row_end]` recovers the
-window). Prints window counts per split × class and asserts one split per
-video.
-
-### `features.py`
-Two stages:
-1. `fill_video_nans(df, channels, max_gap_s=0.5)` — per video, before windowing:
-   linear-interpolate NaN gaps up to 0.5 s via `fill_short_gaps` from
-   `pose_utils` (0.5 s → rows using the median `time_s` spacing).
-2. `window_features(rows_df) -> dict` — per channel, 7 nan-aware stats: mean,
-   std, min, max, range, mean-absolute-change-per-second, NaN fraction. Nothing
-   else.
-
-### `train.py`
-```
-python src/segmentation/train.py [--tag "experiment label"]
-```
-Builds the feature matrix for all windows, fits per-feature NaN-fill medians on
-**train only** (eligible windows, purity ≥ `MIN_PURITY_TRAIN`), trains
-`RandomForestClassifier(n_estimators=200, class_weight="balanced",
-random_state=SEED)`, evaluates on **val** (accuracy, macro-F1, per-class F1,
-confusion matrix, majority-class baseline, top-10 feature importances to spot
-leakage), and writes per-window predictions (all class probabilities + max prob)
-for **val and test**. Test metrics are never computed.
-
-Outputs (all under `outputs/segmentation/`):
-
-| file | what |
-|------|------|
-| `windows.csv` | window index (from `make_windows.py`) |
-| `val_window_report.txt` | latest val report (text) |
-| `rf_model.joblib` | latest model bundle: `model`, `feature_cols`, `fill_values`, `classes` |
-| `window_predictions_{val,test}.csv` | latest per-window predictions |
-
-### Run versioning
-Every `train.py` run archives a full snapshot to
-`outputs/segmentation/runs/<run_id>/` (`run_id` = `YYYYMMDD_HHMMSS`): the
-report, model bundle, val+test predictions, and `run_meta.json` (config + data
-counts + metrics + confusion matrix + top-10 importances + resolved feature
-channels). One row is appended to `outputs/segmentation/runs_log.csv` so runs
-are comparable when you change models, data, or hyperparameters — the log records
-`n_estimators`, `window_s`, `stride_s`, `min_purity_train`, window counts,
-`n_features`, and all val metrics per run. The top-level files are the "latest"
-copy (overwritten); `runs/` is the history.
-
-## Tests
-
-`tests/test_make_windows.py` — builds a fake 10 s CSV with 2 segments and checks
-labels, purity, that no window crosses the end, plus a short-video and a
-row-slice round-trip case.
+### Full pipeline (recommended)
 
 ```
-python -m pytest tests/test_make_windows.py -v
+python src/segmentation/run_all.py
 ```
+
+This calls `make_windows` → `train` → `evaluate` in order and prints the final
+raw-vs-smoothed results table.  Optional flags:
+
+| Flag | Effect |
+|------|--------|
+| `--tag "label"` | forwarded to `train.py`; recorded in `runs_log.csv` |
+| `--skip-windows` | reuse an existing `outputs/segmentation/windows.csv` |
+
+### Individual steps
+
+```
+python src/segmentation/make_windows.py          # build windows.csv
+python src/segmentation/train.py [--tag "label"] # train classifier, write predictions
+python src/segmentation/evaluate.py              # grid-search val, eval test, print table
+```
+
+---
+
+## Config parameters (`config.py`)
+
+All parameters live in `config.py`. Do not hardcode them elsewhere.
+
+| Parameter | Value | Meaning |
+|-----------|-------|---------|
+| `WINDOW_S` | `2.0` | window length in seconds |
+| `STRIDE_S` | `1.0` | step between successive window starts (50 % overlap) |
+| `MIN_ROWS_FRAC` | `0.5` | drop windows with fewer than this fraction of expected rows |
+| `MIN_PURITY_TRAIN` | `0.8` | minimum label purity for a window to be eligible for training |
+| `SEED` | `42` | random seed for all reproducibility |
+| `CLASSES` | `["squat","push_up","jump_jack","transition"]` | ordered class list |
+| `N_ESTIMATORS` (train.py) | `200` | trees in the Random Forest |
+| `CLASS_WEIGHT` (train.py) | `"balanced"` | upweights minority classes |
+| `MAX_FILL_GAP_S` (features.py) | `0.5` | NaN gaps ≤ this many seconds are linearly interpolated before feature extraction |
+
+Smoothing parameters (`TAU_GRID`, `MIN_LEN_GRID` in `evaluate.py`) are searched
+on val; the best pair is written to `outputs/segmentation/chosen_params.json`.
+
+---
+
+## Input columns
+
+### Used as model features (`FEATURE_CHANNELS` allow-list)
+
+The classifier may only use columns in this list (plus their `_3d` variants when
+present). `config.feature_columns(header)` is the single source of truth.
+
+| Column | What it captures |
+|--------|-----------------|
+| `knee_best` | best-side knee angle (hip–knee–ankle); primary squat signal |
+| `elbow_best` | best-side elbow angle (shoulder–elbow–wrist); primary push-up signal |
+| `hip_L`, `hip_R` | left/right hip flexion; secondary squat depth signal |
+| `arm_raise_L`, `arm_raise_R` | left/right arm elevation; jumping-jack lateral arm signal |
+| `leg_spread` | lateral leg separation; jumping-jack leg signal |
+| `ankle_dist_norm` | normalised ankle-to-ankle distance; jumping-jack lower-body signal |
+| `torso_tilt` | torso inclination; distinguishes push-up (forward lean) from squat/transition |
+| `*_3d` variants | world-landmark equivalents of any of the above when present in the CSV |
+
+7 statistics are computed per channel per window: `mean`, `std`, `min`, `max`,
+`range`, `macps` (mean absolute change per second), `nanfrac`.  With 16 base+3d
+channels resolved at runtime the typical feature vector is 112-dimensional.
+
+### Excluded columns (and why)
+
+| Column(s) | Reason excluded |
+|-----------|----------------|
+| `seg_label` | **the label itself** — using it as a feature would be direct label leakage |
+| `seg_type` | metadata field that encodes exercise identity; leaks the label |
+| `subject_jump` | flags a large inter-frame hip shift; administrative metadata, not an exercise signal |
+| `n_poses`, `pose_detected` | detection quality metadata; would let the model exploit data-collection artefacts rather than exercise geometry |
+| `frame` | raw frame index with no temporal meaning after stride-2 extraction |
+| `time_s` | timeline index used for windowing, not an exercise-discriminating feature |
+| `*_vis` columns | MediaPipe landmark visibility scores; highly correlated with which exercise is present (e.g. ankle visibility is low during push-ups) and would constitute indirect leakage |
+
+---
+
+## Output files
+
+All outputs land under `outputs/segmentation/`.
+
+| File | Produced by | Contents |
+|------|-------------|----------|
+| `windows.csv` | `make_windows.py` | one row per sliding window; columns below |
+| `val_window_report.txt` | `train.py` | val accuracy, macro-F1, per-class F1, confusion matrix, top-10 importances |
+| `rf_model.joblib` | `train.py` | model bundle: `model`, `feature_cols`, `fill_values`, `classes` |
+| `window_predictions_val.csv` | `train.py` | per-window val predictions + class probabilities |
+| `window_predictions_test.csv` | `train.py` | per-window test predictions + class probabilities |
+| `runs_log.csv` | `train.py` | one row per run; config + window counts + all val metrics |
+| `runs/<run_id>/` | `train.py` | full snapshot: report, model, predictions, `run_meta.json` |
+| `chosen_params.json` | `evaluate.py` | `{"tau": …, "min_len": …}` from val grid search |
+| `results.csv` | `evaluate.py` | mean ± std of all metrics across test videos (raw and smoothed) |
+| `test_segments.json` | `evaluate.py` | smoothed segments per test video |
+| `timeline_example.png` | `evaluate.py` | GT / raw / smoothed timeline for the first test video |
+
+---
+
+## Segment format
+
+Every segment (in `test_segments.json` and internally in `evaluate.py`) is a
+dict:
+
+```json
+{"exercise": "squat", "start_time": 4.2, "end_time": 19.8}
+```
+
+`exercise` is always one of `squat`, `push_up`, `jump_jack`, `transition`.
+`start_time` and `end_time` are in seconds relative to the start of the
+synthetic video.  Segments are non-overlapping and cover the full video duration
+(the first segment starts at 0 and the last ends at `video_end_s`).
+
+### `windows.csv` columns
+
+| Column | Description |
+|--------|-------------|
+| `video_id` | synthetic video id, e.g. `synth_train_0001` |
+| `split` | `train`, `val`, or `test` (from the video's boundary JSON) |
+| `win_idx` | 0-based index within the video |
+| `t_start`, `t_end` | window boundaries in seconds |
+| `t_center` | midpoint in seconds |
+| `label` | majority `seg_label` across the window's rows |
+| `purity` | fraction of rows matching the majority label |
+| `row_start`, `row_end` | slice into the time-sorted angle CSV (`iloc[row_start:row_end]`); `row_end` is exclusive |
+
+---
+
+## Known limitations
+
+- **Val is ~one subject (stu10).** The val split for segmentation is built from
+  synthetic videos whose source clips come almost entirely from `stu10_*`
+  RepCount recordings.  Val metrics reflect performance on one person's movement
+  pattern; they may not generalise.
+
+- **Test is mostly two subjects (stu2/stu4).** Similarly, the test split is
+  dominated by clips from `stu2` and `stu4`.  The test Edit score and frame
+  accuracy are therefore an in-distribution estimate for those subjects, not a
+  population estimate.  Grouped n and subject counts should be reported alongside
+  any test metric in the paper.
+
+- **Transitions are real pre/post-rep footage so boundaries are fuzzy.** The
+  `transition` class is sourced from idle frames around RepCount rep boundaries;
+  these frames blend naturally into the start and end of each exercise, so the
+  true ground-truth boundary is ambiguous by a few frames.  The majority-vote
+  windowing absorbs some of this, but boundary windows are legitimately
+  multi-class.  This explains why `transition` is the weakest class in val F1
+  and why boundary error metrics should be interpreted with that ambiguity in
+  mind.
+
+- **`jump_jack` has high NaN rates.** Both arm and leg spread involve
+  fast lateral movement; MediaPipe visibility drops when limbs leave the frame
+  or cross the body midline.  This causes elevated `*_nanfrac` values for
+  `arm_raise_L/R` and `leg_spread` during jump-jack windows.  The current
+  workaround is the pre-window NaN interpolation up to `MAX_FILL_GAP_S = 0.5 s`
+  and the `nanfrac` statistic in the feature vector.  The effect is visible in
+  the model: jump_jack achieves a higher F1 than might be expected (the NaN
+  pattern itself is diagnostic) but also the one that degrades most when a
+  subject has unusual arm trajectories.
+
+- **No augmentation.** The Random Forest is trained on unaugmented windows.
+  The architecture section of the project context mentions left/right mirroring
+  and time-warp as planned augmentations; these have not been applied.
+
+- **No deep model.** The classifier is a `RandomForestClassifier` on
+  hand-crafted angle statistics.  A 1D-CNN or LSTM over the raw angle sequences
+  would likely improve `transition` recall and boundary precision, but is left as
+  future work.
+
+---
 
 ## Current result (val)
 
@@ -122,3 +206,15 @@ Top features are `torso_tilt` and `arm_raise` (physically meaningful), with no
 is the weak class; the errors are boundary windows where exercise edges get read
 as transition. That is the case the smoothing / minimum-segment-length step is
 meant to clean up, so a low raw-transition score is expected.
+
+---
+
+## Tests
+
+`tests/test_make_windows.py` — builds a fake 10 s CSV with 2 segments and checks
+labels, purity, that no window crosses the end, plus a short-video and a
+row-slice round-trip case.
+
+```
+python -m pytest tests/test_make_windows.py -v
+```
