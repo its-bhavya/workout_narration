@@ -2,14 +2,15 @@
 Owned by: Bhavya
 Data source: RepCount (squat, push_up, jump_jack)
 
-Scripts, run in order:
+Scripts, run in order (for segmentation, use only steps 1–5):
 1. `load_repcount.py`            — parse annotation CSVs, filter to target exercises, normalize category names → `repcount_filtered.csv`, `repcount_excluded.csv`
 2. `quality_screen.py`           — MediaPipe Pose Landmarker visibility check per video → `repcount_quality.csv`
 3. `apply_quality_thresholds.py` — inspect quality distributions, decide pass/fail thresholds → `quality_screening.csv`
 4. `build_splits.py`             — leakage-safe train/val/test split assignment (groups by subject, RepCount only, seed 42) → `splits.csv`
 5. `concatenate_videos.py`       — stitch whole clips into synthetic multi-exercise videos with ground-truth segment labels → `data/synthetic/<split>/synth_<split>_<NNNN>.{mp4,json}` + `data/manifests/synthetic_index.csv`
-6. `extract_pose.py`             — extract per-frame pose keypoints via MediaPipe → `data/features/repcount/pose/*.parquet`
-7. `extract_features.py`         — compute joint angles and exercise-specific motion features → `data/features/repcount/derived/*.parquet`
+6. `extract_pose_features.py`    — extract per-frame pose keypoints via MediaPipe and compute joint angles → `data/features/<video_id>_angles.csv` (used by segmentation) + `data/manifests/pose_extraction_summary.csv`
+
+(Legacy: `extract_pose.py` and `extract_features.py` produced per-clip parquet files under `data/features/repcount/{pose,derived}/` — no longer used; extraction now goes directly to per-video angle CSVs.)
 
 Utility scripts:
 - `quality_screening_checks.py`  — ad-hoc inspection of borderline quality cases
@@ -18,6 +19,39 @@ Utility scripts:
 - `plot_features.py`             — plot extracted features for exploration
 - `verify_l_columns.py`          — contact-sheet PNGs of frames at each L-value for 6 random clips (2 per exercise); outputs to `outputs/l_check/`; run to confirm L-column semantics by eye
 - `preview_boundaries.py`        — render an annotated preview MP4 for a synthetic video (segment label + frame index + timeline bar); `--video-id synth_train_0001`
+
+## extract_pose_features.py
+
+**Input:** synthetic videos from `data/synthetic/<split>/` + boundary JSONs.
+**Output:** `data/features/<video_id>_angles.csv` (per-frame joint angles, stride-2 by default) + `data/manifests/pose_extraction_summary.csv`.
+
+Usage (run from repo root):
+```
+# single video
+python src/data_pipeline/extract_pose_features.py --video data/synthetic/train/synth_train_0001.mp4
+
+# all videos
+python src/data_pipeline/extract_pose_features.py --all
+
+# all videos, 4 workers, force re-extraction
+python src/data_pipeline/extract_pose_features.py --all --workers 4 --force
+
+# train+val only, stride 2, 4 workers (for faster iteration)
+python src/data_pipeline/extract_pose_features.py --all --only-splits train,val --stride 2 --workers 4
+```
+
+Reads each video's companion boundary JSON to extract the split (never tuned on
+test). Fills short tracking gaps: per-frame visibility filtering → NaN masking;
+a few frames with low visibility per joint is normal. Per-frame angles:
+`knee_{L,R,best}`, `elbow_{L,R,best}`, `hip_{L,R}`, `arm_raise_{L,R}`,
+`leg_spread`, `ankle_dist_norm`, `torso_tilt` (each computed 2-D and optionally
+3-D). Plus `knee_best`, `elbow_best`, `*_side` (left/right choice per frame) and
+visibility stats. Also writes `data/manifests/pose_extraction_summary.csv` with
+detection rate, NaN gaps per exercise, subject jumps, etc.
+
+**For segmentation:** Use the angle CSVs as input to `src/segmentation/`. Do NOT
+use the legacy parquet files under `data/features/repcount/{pose,derived}/` —
+they are per-clip and carry label leakage.
 
 ## concatenate_videos.py
 
