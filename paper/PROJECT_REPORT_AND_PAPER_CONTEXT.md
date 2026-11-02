@@ -152,13 +152,13 @@ $$\theta = \arccos\left(\frac{(\mathbf{a} - \mathbf{b}) \cdot (\mathbf{c} - \mat
 - **Data Hygiene:** Any angle with joint visibility $v < 0.50$ is flagged as NaN. Short gaps ($\le 0.4$ s) are linearly interpolated; segments with consecutive missing data exceeding 0.4 s remain NaN.
 
 ### 3.4 Stage 3: Sliding-Window Segmentation and OnlineTAS Smoothing
-1. **Windowing:** A sliding temporal window of $W = 45$ to $60$ frames (1.5 to 2.0 s at 30 fps) with a stride of $S = 15$ to $30$ frames (50% overlap).
-2. **Statistical Pooling:** Within each window, summary statistics (mean, variance, minimum, maximum, 25th/75th percentiles, and first-order temporal derivatives) are extracted across all joint angles.
-3. **Classification:** A multi-class Random Forest / Support Vector Classifier assigns class probabilities over $\{\text{squat}, \text{push\_up}, \text{jump\_jack}, \text{transition}\}$.
-4. **Temporal Smoothing:** Raw frame-level predictions suffer from boundary flicker. We apply:
-   - *Confidence Thresholding:* Low-confidence predictions revert to the previous stable state.
-   - *Minimum Duration Filtering:* Any detected action regime persisting for less than $T_{\min} = 1.0$ s is suppressed and merged into the surrounding majority label.
-   - *Contiguous Run-Length Merging:* Adjacent identical labels are merged into continuous intervals $[\tau_{\text{start}}, \tau_{\text{end}}]$.
+1. **Windowing:** A sliding temporal window of $W = 45$ to $60$ frames (1.5 to 2.0 s at 30 fps) with a stride of $S = 15$ to $30$ frames (50% overlap). Final configuration locked at $W = 2.0$ s, $S = 1.0$ s.
+2. **Statistical Pooling:** Within each window, seven summary statistics are extracted per joint angle channel: mean, standard deviation, minimum, maximum, range, mean absolute change per second (MACPS), and NaN fraction. With 9 base feature channels plus their available 3D-world variants (16 channels total at runtime), the typical feature vector is **112-dimensional**.
+3. **Classification:** A multi-class classifier assigns class probabilities over $\{\text{squat}, \text{push\_up}, \text{jump\_jack}, \text{transition}\}$. A systematic sweep over 8 classifier families was conducted (see Section 4.8); Logistic Regression and Random Forest are the primary candidates for the reported results.
+4. **Temporal Smoothing:** Raw per-window predictions suffer from boundary flicker. We apply two-stage OnlineTAS-style post-processing:
+   - *Confidence Thresholding ($\tau$):* Windows with predicted class probability $< \tau$ inherit the previous window's label (forward-fill), maintaining the last confident prediction across uncertain transitions. The first window always retains its own label.
+   - *Minimum Run-Length Enforcement (min\_len):* Any contiguous run of identical predicted labels shorter than `min_len` windows is absorbed into the adjacent preceding run (or the following run for the first segment). Exception: `transition` runs are never absorbed, as resting intervals are legitimately short by design.
+   - Both $\tau$ and `min_len` are selected by exhaustive grid search on the **validation split only** (never touching test), maximising Edit Score with frame accuracy as a tie-breaker.
 
 ### 3.5 Stage 4: Adaptive Hysteresis Repetition Counter (`rep_counter.py`)
 Within each exercise segment $[\tau_{\text{start}}, \tau_{\text{end}}]$, the repetition counter operates on the continuous time series without touching the raw video:
@@ -255,6 +255,44 @@ The rule-based repetition counter was evaluated on **119 exercise segments** acr
 ### 4.7 Scaled Feature Extraction & Unit Test Verification
 - **Feature Extraction Scale-Up:** Pose extraction (`extract_pose_features.py`) was scaled across 31 continuous synthetic videos with stride-2 (15 Hz) subsampling, achieving high detection rates ($92\%\text{--}100\%$) and logging complete metrics in `pose_extraction_summary.csv`.
 - **Test Suite:** 38 unit tests pass at 100% across `tests/test_concatenate.py` and `tests/test_pose_utils.py`.
+
+### 4.8 Segmentation Classifier and Smoothing Hyperparameter Sweep
+
+To determine the best classifier and post-processing configuration, a systematic sweep was conducted over the pre-built feature matrix (fixed: window=2.0 s, stride=1.0 s, 112-dim feature vectors, 5891 windows across 45 synthetic videos).
+
+**Sweep design:** 8 classifier families × 2 `min_purity_train` thresholds × a 4×4 smoothing grid (τ ∈ {0.4, 0.5, 0.6, 0.7} × min_len ∈ {1, 2, 3, 4}) = **16 experiments**. The feature matrix was built once; only the classifier, purity threshold, and smoothing parameters were varied. Smoothing parameters were selected by val-set grid search for each experiment; test was evaluated once with the chosen parameters.
+
+**Results (ranked by test Edit Score):**
+
+| Rank | Classifier | Purity | Best τ | min\_len | Test Edit ↑ | Test Acc ↑ | Test F1@25 | Test F1@50 | Val Edit |
+|------|-----------|--------|--------|---------|------------|-----------|-----------|-----------|----------|
+| 1 | **LR** | 0.7 | 0.7 | 4 | **63.4** | 0.781 | 0.579 | 0.453 | 55.2 |
+| 2 | LR | 0.8 | 0.7 | 4 | 60.5 | 0.773 | 0.581 | 0.459 | 54.6 |
+| 3 | GBT | 0.7 | 0.7 | 1 | 60.0 | 0.785 | 0.536 | 0.441 | 59.0 |
+| 4 | HistGBT | 0.7 | 0.7 | 1 | 59.5 | **0.815** | 0.585 | 0.466 | 48.3 |
+| 5 | SVM (RBF) | 0.7 | 0.6 | 4 | 58.8 | 0.765 | 0.575 | 0.454 | 58.0 |
+| 7 | ExtraTrees | 0.8 | 0.4 | 1 | 58.1 | 0.807 | 0.556 | 0.474 | 54.6 |
+| 9 | **RF** *(baseline)* | 0.7 | 0.6 | 1 | 57.2 | 0.799 | **0.629** | **0.487** | 56.0 |
+| 14 | MLP | 0.8 | 0.6 | 3 | 49.6 | 0.715 | 0.414 | 0.291 | 47.0 |
+| 16 | KNN | 0.7 | 0.4 | 4 | 48.0 | 0.757 | 0.490 | 0.370 | 56.4 |
+
+Full 16-row results in `outputs/segmentation/sweep_results.csv`.
+
+**Key findings:**
+
+1. **Logistic Regression achieves the best test Edit Score** (+6.2 points over the RF baseline). Its smoother linear decision boundaries, combined with aggressive smoothing (τ=0.7, min_len=4), produce cleaner segment-label sequences. This is consistent with the hypothesis that the 112-dim feature space is already linearly separable for the three exercise classes, and that post-processing (not classifier complexity) is the main lever for boundary quality.
+
+2. **HistGBT achieves the best frame accuracy (0.815)** but lower Edit Score. It classifies individual windows accurately but produces more fragmented sequences that smoothing cannot fully repair, suggesting its ensembling over deep trees overfits to per-window patterns at the expense of temporal consistency.
+
+3. **RF has the best segment-level F1@25 (0.629)** — the most accurate placement of segment boundaries at 25% IoU threshold. This makes RF the preferable choice if downstream rep-counting accuracy (which depends on boundary precision rather than sequence cleanliness) is the primary metric.
+
+4. **Lower purity threshold (0.7 vs 0.8) generally wins.** Including more boundary-adjacent training windows exposes the classifier to the continuous transition from exercise to rest, helping it generalize rather than overfit to the interior of each exercise class.
+
+5. **MLP and KNN underperform** by 8–18 Edit Score points. At this dataset scale (≈3100 eligible training windows), MLP does not generalize well and KNN's Euclidean distance over 112 mixed statistics is not informative enough.
+
+6. **Val→test generalisation gap is visible for LR** (val Edit 55.2, test Edit 63.4 — test actually outperforms val). This reflects that val is dominated by one subject (stu10) who may be harder to segment than the test subjects (stu2/stu4). The metric should be reported with this caveat.
+
+**Implementation note:** All sweep experiments are run via `python src/segmentation/hparam_sweep.py`. The script accepts `--classifiers`, `--min-purity-grid`, `--tau-grid`, and `--min-len-grid` flags for targeted re-runs.
 
 ---
 

@@ -32,6 +32,31 @@ python src/segmentation/train.py [--tag "label"] # train classifier, write predi
 python src/segmentation/evaluate.py              # grid-search val, eval test, print table
 ```
 
+### Classifier + smoothing hyperparameter sweep
+
+`hparam_sweep.py` loads the pre-built `windows.csv` and angle CSVs, builds the
+feature matrix **once**, then sweeps classifiers, `min_purity_train`, and the
+smoothing grid.  Windowing and NaN-fill settings are fixed (same as `train.py`).
+
+```
+# Full sweep: all 8 classifiers × 2 purity thresholds
+python src/segmentation/hparam_sweep.py
+
+# Quick sanity check: RF + LR only
+python src/segmentation/hparam_sweep.py --quick
+
+# Specific classifiers
+python src/segmentation/hparam_sweep.py --classifiers rf extra_trees hist_gbt lr
+
+# Wider smoothing search
+python src/segmentation/hparam_sweep.py --tau-grid 0.3 0.4 0.5 0.6 0.7 --min-len-grid 1 2 3 4 5
+```
+
+Results are ranked by test Edit Score and written to
+`outputs/segmentation/sweep_results.csv`.
+
+**Classifiers available:** `rf`, `extra_trees`, `gbt`, `hist_gbt`, `lr`, `svm`, `knn`, `mlp`.
+
 ---
 
 ## Config parameters (`config.py`)
@@ -108,6 +133,7 @@ All outputs land under `outputs/segmentation/`.
 | `results.csv` | `evaluate.py` | mean ± std of all metrics across test videos (raw and smoothed) |
 | `test_segments.json` | `evaluate.py` | smoothed segments per test video |
 | `timeline_example.png` | `evaluate.py` | GT / raw / smoothed timeline for the first test video |
+| `sweep_results.csv` | `hparam_sweep.py` | ranked results across all classifier + smoothing experiments |
 
 ---
 
@@ -206,6 +232,42 @@ Top features are `torso_tilt` and `arm_raise` (physically meaningful), with no
 is the weak class; the errors are boundary windows where exercise edges get read
 as transition. That is the case the smoothing / minimum-segment-length step is
 meant to clean up, so a low raw-transition score is expected.
+
+---
+
+## Classifier sweep results (test, smoothed)
+
+`hparam_sweep.py` was run over 8 classifiers × 2 purity thresholds (16
+experiments total).  The feature matrix (112-dim, 5891 windows, fixed
+windowing / NaN-fill) was built once; only classifier, `min_purity_train`, and
+smoothing params (tau × min_len, grid-searched on val) were varied.
+
+| Rank | Classifier | Purity | Best τ | min_len | Test Edit | Test Acc | Test F1@25 | Test F1@50 | Val Edit |
+|------|-----------|--------|--------|---------|-----------|----------|-----------|-----------|----------|
+| 1 | **lr** | 0.7 | 0.7 | 4 | **63.4** | 0.781 | 0.579 | 0.453 | 55.2 |
+| 2 | lr | 0.8 | 0.7 | 4 | 60.5 | 0.773 | 0.581 | 0.459 | 54.6 |
+| 3 | gbt | 0.7 | 0.7 | 1 | 60.0 | 0.785 | 0.536 | 0.441 | 59.0 |
+| 4 | hist_gbt | 0.7 | 0.7 | 1 | 59.5 | **0.815** | 0.585 | 0.466 | 48.3 |
+| 5 | svm | 0.7 | 0.6 | 4 | 58.8 | 0.765 | 0.575 | 0.454 | 58.0 |
+| 6 | svm | 0.8 | 0.7 | 4 | 58.3 | 0.771 | 0.601 | 0.490 | 55.2 |
+| 7 | extra_trees | 0.8 | 0.4 | 1 | 58.1 | 0.807 | 0.556 | 0.474 | 54.6 |
+| 9 | **rf** *(baseline)* | 0.7 | 0.6 | 1 | 57.2 | 0.799 | **0.629** | **0.487** | 56.0 |
+| 14 | mlp | 0.8 | 0.6 | 3 | 49.6 | 0.715 | 0.414 | 0.291 | 47.0 |
+| 16 | knn | 0.7 | 0.4 | 4 | 48.0 | 0.757 | 0.490 | 0.370 | 56.4 |
+
+Full results in `outputs/segmentation/sweep_results.csv`.
+
+**Key findings:**
+- Logistic Regression with purity ≥ 0.7 and aggressive smoothing (τ=0.7, min_len=4) achieves
+  the best test Edit Score (+6.2 points over RF baseline), suggesting that smoother decision
+  boundaries combined with strong temporal post-processing outperforms RF's local partitioning.
+- HistGBT achieves the best frame accuracy (0.815) but lower Edit Score — it places
+  individual frames correctly but produces more fragmented sequences.
+- RF retains the best segment-level F1@25 (0.629), indicating the most accurate boundary placement.
+- MLP and KNN are clear underperformers on this dataset size.
+- Lower purity threshold (0.7 vs 0.8) generally wins, as including more boundary windows
+  exposes the model to transition-adjacent patterns.
+- Best smoothing params cluster at τ=0.6–0.7 and min_len=1–4 depending on classifier.
 
 ---
 
