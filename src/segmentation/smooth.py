@@ -68,6 +68,11 @@ def _enforce_min_len(labels: list[str], min_len: float) -> list[str]:
     short run is always absorbed into the *current* previous run (which may have
     grown from an earlier absorption). This is deterministic and terminates
     because every absorption strictly reduces the number of runs.
+
+    Exception: ``transition`` runs are never absorbed regardless of length.
+    Transitions are genuinely short by design (a few seconds of rest between
+    exercises), so forcing them to meet ``min_len`` would erase real rest
+    periods and merge adjacent exercise segments incorrectly.
     """
     if not labels or min_len <= 1:
         return list(labels)
@@ -76,12 +81,17 @@ def _enforce_min_len(labels: list[str], min_len: float) -> list[str]:
         runs = _runs(out)
         if len(runs) <= 1:
             break
-        # First short run; absorb it into its neighbour.
+        # Find the first short run that is NOT transition, and whose absorption
+        # target neighbour is also NOT transition (absorbing into a transition
+        # run would grow it and then cause the far-side exercise run to be
+        # swallowed by the enlarged transition in the next iteration).
         idx = None
-        for k, (_lab, s, e) in enumerate(runs):
-            if (e - s) < min_len:
-                idx = k
-                break
+        for k, (lab, s, e) in enumerate(runs):
+            if (e - s) < min_len and lab != "transition":
+                neighbour_label = runs[1][0] if k == 0 else runs[k - 1][0]
+                if neighbour_label != "transition":
+                    idx = k
+                    break
         if idx is None:
             break
         _lab, s, e = runs[idx]
