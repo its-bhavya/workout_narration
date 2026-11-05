@@ -59,7 +59,7 @@ K_MAX = 5
 INCLUDE_STATUSES = {"pass", "review"}
 EXCLUDE_FPS_BELOW = 20.0
 
-REPCOUNT_ROOT = Path(r"C:\Users\Bhavya\Downloads\RepCountA (1)\LLSP")
+REPCOUNT_ROOT = Path(r"C:\Users\Lenovo\Downloads\RepCountA (1)\LLSP")
 VIDEO_DIR = REPCOUNT_ROOT / "video"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")

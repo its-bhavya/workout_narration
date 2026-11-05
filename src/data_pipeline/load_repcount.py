@@ -39,7 +39,7 @@ import pandas as pd
 # Configuration
 # ---------------------------------------------------------------------
 
-REPCOUNT_ROOT = Path(r"C:\Users\Bhavya\Downloads\RepCountA (1)\LLSP")
+REPCOUNT_ROOT = Path(r"C:\Users\Lenovo\Downloads\RepCountA")
 
 ANNOTATION_DIR = REPCOUNT_ROOT / "annotation"
 VIDEO_DIR = REPCOUNT_ROOT / "video"

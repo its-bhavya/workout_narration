@@ -62,6 +62,7 @@ EXERCISES = {
         "smooth_s": 0.5,
         "min_gap_s": 0.5,           # ignore reps closer than this
         "min_range_deg": 25.0,      # below this p10..p90 range = no real motion
+        "confirm_s": 0.15,
     },
     "push_up": {
         "columns": ("elbow_L", "elbow_R"),
@@ -73,6 +74,7 @@ EXERCISES = {
         "smooth_s": 0.1,
         "min_gap_s": 0.2,
         "min_range_deg": 20.0,
+        "confirm_s": 0.10,
     },
     "jump_jack": {
         "columns": ("arm_raise_L", "arm_raise_R"),
@@ -84,6 +86,7 @@ EXERCISES = {
         "smooth_s": 0.3,
         "min_gap_s": 0.5,
         "min_range_deg": 40.0,
+        "confirm_s": 0.15,
     },
 }
 # NOTE: min_range_deg values are placeholders. evaluate_rep_counts.py prints the
@@ -235,46 +238,112 @@ def adaptive_thresholds(
     return lo + fracs[0] * (hi - lo), lo + fracs[1] * (hi - lo)
 
 
+# def run_state_machine(
+#     sig: np.ndarray,
+#     low_thresh: float,
+#     high_thresh: float,
+#     pattern: str,
+# ) -> list[int]:
+#     """
+#     Indices at which a full cycle COMPLETES (hysteresis: two thresholds).
+
+#     down_up       (squat, push_up):  high -> below low -> back above high
+#     low_high_low  (jump_jack):       low -> above high -> back below low
+
+#     NaN samples are skipped, so state is held across a lost-tracking gap.
+#     The machine starts in the resting state; a segment that begins at the
+#     bottom of a rep therefore counts that first partial rep when it returns.
+#     """
+
+#     completed: list[int] = []
+#     active = False
+
+#     for i, a in enumerate(sig):
+#         if np.isnan(a):
+#             continue
+
+#         if pattern == "down_up":
+#             if not active and a < low_thresh:
+#                 active = True
+#             elif active and a > high_thresh:
+#                 active = False
+#                 completed.append(i)
+#         else:
+#             if not active and a > high_thresh:
+#                 active = True
+#             elif active and a < low_thresh:
+#                 active = False
+#                 completed.append(i)
+
+#     return completed
+
 def run_state_machine(
     sig: np.ndarray,
     low_thresh: float,
     high_thresh: float,
     pattern: str,
+    fs: float = 30.0,
+    confirm_s: float = 0.15,
 ) -> list[int]:
     """
-    Indices at which a full cycle COMPLETES (hysteresis: two thresholds).
+    Detect completed cycles using hysteresis and temporal confirmation.
 
-    down_up       (squat, push_up):  high -> below low -> back above high
-    low_high_low  (jump_jack):       low -> above high -> back below low
-
-    NaN samples are skipped, so state is held across a lost-tracking gap.
-    The machine starts in the resting state; a segment that begins at the
-    bottom of a rep therefore counts that first partial rep when it returns.
+    A completion threshold must remain crossed for confirm_s seconds.
+    Missing pose data cancels a pending completion.
     """
 
     completed: list[int] = []
     active = False
+    pending_idx = None
+
+    confirm_frames = max(1, int(np.ceil(confirm_s * fs-1e-9)))
 
     for i, a in enumerate(sig):
+
         if np.isnan(a):
+
+            active = False
+
+            pending_idx = None
+
             continue
 
         if pattern == "down_up":
+
             if not active and a < low_thresh:
                 active = True
+
             elif active and a > high_thresh:
-                active = False
-                completed.append(i)
+
+                if pending_idx is None:
+                    pending_idx = i
+
+                if i - pending_idx + 1 >= confirm_frames:
+                    completed.append(pending_idx)
+                    active = False
+                    pending_idx = None
+
+            elif active:
+                pending_idx = None
+
         else:
             if not active and a > high_thresh:
                 active = True
+
             elif active and a < low_thresh:
-                active = False
-                completed.append(i)
+
+                if pending_idx is None:
+                    pending_idx = i
+
+                if i - pending_idx + 1 >= confirm_frames:
+                    completed.append(pending_idx)
+                    active = False
+                    pending_idx = None
+
+            elif active:
+                pending_idx = None
 
     return completed
-
-
 def drop_close(times: list[float], min_gap_s: float) -> list[float]:
     kept: list[float] = []
 
@@ -394,7 +463,10 @@ def count_for_exercise(
 
     result["thresholds"] = (round(float(t_low), 1), round(float(t_high), 1))
 
-    idx = run_state_machine(sig, t_low, t_high, cfg["pattern"])
+    #idx = run_state_machine(sig, t_low, t_high, cfg["pattern"])
+    idx = run_state_machine(
+    sig, t_low, t_high, cfg["pattern"], fs=fs, confirm_s=cfg["confirm_s"],
+    )
     times = drop_close([float(t[i]) for i in idx], cfg["min_gap_s"])
 
     result["reps"] = len(times)

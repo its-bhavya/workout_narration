@@ -82,6 +82,7 @@ from pose_utils import (
     hip_midpoint_norm,
     largest_bbox_pose_index,
     norm_to_pixels,
+    PosePersonTracker, # added to solve multiple person detection not per frame 
 )
 
 # ---------------------------------------------------------------------------
@@ -112,6 +113,12 @@ log = logging.getLogger(__name__)
 # ---------------------------------------------------------------------------
 # Helpers
 # ---------------------------------------------------------------------------
+def get_clip_start_frame(frame_idx, clip_join_frames):
+    """Return the start frame of the source clip containing this frame."""
+    return max(
+        (join for join in clip_join_frames if join <= frame_idx),
+        default=0,
+    )
 
 def _lm_xyz_norm(lm_list, idx: int) -> tuple[float, float, float]:
     """Normalised (x, y, z) from a landmark list; NaN if None."""
@@ -363,6 +370,33 @@ def _apply_vis_mask(row: dict, vis_thresh: float) -> dict:
             row[name] = float("nan")
             row[f"{name}_3d"] = float("nan")
     return row
+def _candidate_exercise_signal(pose, exercise, width, height, vis_thresh):
+    """Extract the movement signal used to identify the exercising person."""
+
+    angles = _compute_angles_for_frame(
+        pose, None, width, height, vis_thresh
+    )
+    _apply_vis_mask(angles, vis_thresh)
+
+    if exercise == "squat":
+        prefix = "knee"
+    elif exercise == "push_up":
+        prefix = "elbow"
+    elif exercise == "jump_jack":
+        prefix = "arm_raise"
+    else:
+        return float("nan"), 0.0
+
+    left_angle = angles[f"{prefix}_L"]
+    right_angle = angles[f"{prefix}_R"]
+
+    left_vis = angles[f"{prefix}_L_vis"]
+    right_vis = angles[f"{prefix}_R_vis"]
+
+    if left_vis >= right_vis:
+        return left_angle, left_vis
+
+    return right_angle, right_vis
 
 
 # ---------------------------------------------------------------------------
@@ -431,10 +465,14 @@ def extract_video_angles(
         raise RuntimeError(f"Cannot open video: {video_path}")
 
     rows = []
+    # Temporarily store candidate features until the exercising person is selected.
+    pending_candidate_rows = []
     frame_idx = 0
     n_detected = 0
     prev_hip_mid: tuple[float, float] | None = None
     prev_ts_ms = -1
+    person_tracker = PosePersonTracker()
+    previous_segment_key = None
 
     with mp_vision.PoseLandmarker.create_from_options(options) as lm:
         while True:
@@ -466,36 +504,246 @@ def extract_video_angles(
             poses = result.pose_landmarks or []
             world_poses = result.pose_world_landmarks or []
             n_poses = len(poses)
-            pose_detected = n_poses > 0
+            #pose_detected = n_poses > 0
 
-            if pose_detected:
+            # if pose_detected:
+            #     n_detected += 1
+            #     subj_idx = largest_bbox_pose_index(poses)
+            #     img_lm = poses[subj_idx]
+            #     wld_lm = world_poses[subj_idx] if subj_idx < len(world_poses) else None
+            # else:
+            #     img_lm = None
+            #     wld_lm = None
+
+           
+                        # Get the current exercise segment first.
+            seg = seg_at_frame.get(frame_idx, {})
+
+            # current_segment_key = (
+            #     seg.get("type", ""),
+            #     seg.get("label", ""),
+            #     seg.get("start_frame", frame_idx),
+            # )
+            # Identify the original source clip containing this frame.
+            # clip_start_frame = max(
+            #     (join for join in clip_join_set if join <= frame_idx),
+            #     default=0,
+            # )
+            clip_start_frame = get_clip_start_frame(
+                frame_idx,
+                clip_join_set,
+            )
+
+            current_segment_key = (
+                seg.get("type", ""),
+                seg.get("label", ""),
+                seg.get("start_frame", frame_idx),
+                clip_start_frame,
+            )
+            # Reset tracker whenever a new segment begins.
+            if current_segment_key != previous_segment_key:
+                # person_tracker.reset_for_segment(
+                #     segment_label=seg.get("label", ""),
+                #     exercise_signal=None,
+                # )
+                # previous_segment_key = current_segment_key
+                 # Flush any unprocessed observation frames from the previous segment.
+                if pending_candidate_rows:
+                    selected_id = person_tracker.selected_track_id
+
+                    for buffered_frame in pending_candidate_rows:
+                        selected_row = (
+                            buffered_frame["candidates"].get(selected_id)
+                            if selected_id is not None
+                            else None
+                        )
+
+                        if selected_row is not None:
+                            rows.append(selected_row)
+                            n_detected += 1
+                        else:
+                            rows.append({
+                                "frame": buffered_frame["frame"],
+                                "time_s": buffered_frame["frame"] / fps,
+                                "pose_detected": False,
+                                "n_poses": buffered_frame["n_poses"],
+                                "subject_jump": False,
+                                "seg_type": buffered_frame["seg_type"],
+                                "seg_label": buffered_frame["seg_label"],
+                            })
+
+                    pending_candidate_rows.clear()
+
+                exercise_signal = None
+
+                if seg.get("type") == "exercise":
+                    exercise = seg.get("label", "")
+
+                    exercise_signal = lambda pose: _candidate_exercise_signal(
+                        pose,
+                        exercise,
+                        width,
+                        height,
+                        vis_thresh,
+                    )
+
+                person_tracker.reset_for_segment(
+                    segment_label=seg.get("label", ""),
+                    exercise_signal=exercise_signal,
+                )
+
+                prev_hip_mid = None
+                previous_segment_key = current_segment_key
+
+            # Select the person only after the segment reset.
+            # subj_idx = person_tracker.select_person(poses)
+
+            # if subj_idx is not None:
+            #     n_detected += 1
+            #     img_lm = poses[subj_idx]
+            #     wld_lm = (
+            #         world_poses[subj_idx]
+            #         if subj_idx < len(world_poses)
+            #         else None
+            #     )
+            #     pose_detected = True
+            # else:
+            #     img_lm = None
+            #     wld_lm = None
+            #     pose_detected = False
+
+            # # Subject-jump diagnostic.
+            # hip_mid = hip_midpoint_norm(img_lm)
+            # subject_jump = False
+
+            # if hip_mid is not None and prev_hip_mid is not None:
+            #     dx = hip_mid[0] - prev_hip_mid[0]
+            #     dy = hip_mid[1] - prev_hip_mid[1]
+            #     subject_jump = math.sqrt(dx * dx + dy * dy) > 0.2
+
+            # if hip_mid is not None:
+            #     prev_hip_mid = hip_mid
+            # else:
+            #     prev_hip_mid = None
+
+            # angle_row = _compute_angles_for_frame(
+            #     img_lm, wld_lm, width, height, vis_thresh
+            # )
+            # _apply_vis_mask(angle_row, vis_thresh)
+
+            # # best-side columns are computed after collecting all rows
+            # row = {
+            #     "frame": frame_idx,
+            #     "time_s": frame_idx / fps,
+            #     "pose_detected": pose_detected,
+            #     "n_poses": n_poses,
+            #     "subject_jump": subject_jump,
+            #     "seg_type": seg.get("type", ""),
+            #     "seg_label": seg.get("label", ""),
+            #     **angle_row,
+            # }
+            # rows.append(row)
+            was_locked = person_tracker.locked
+            subj_idx = person_tracker.select_person(poses)
+
+            # During the observation phase, collect features for every candidate.
+            if seg.get("type") == "exercise" and not was_locked:
+                candidate_rows = {}
+
+                for detection_idx, pose in enumerate(poses):
+                    if detection_idx >= len(person_tracker.detection_track_ids):
+                        continue
+
+                    track_id = person_tracker.detection_track_ids[detection_idx]
+                    if track_id is None:
+                        continue
+
+                    world_pose = (
+                        world_poses[detection_idx]
+                        if detection_idx < len(world_poses)
+                        else None
+                    )
+
+                    candidate_angles = _compute_angles_for_frame(
+                        pose, world_pose, width, height, vis_thresh
+                    )
+                    _apply_vis_mask(candidate_angles, vis_thresh)
+
+                    candidate_rows[track_id] = {
+                        "frame": frame_idx,
+                        "time_s": frame_idx / fps,
+                        "pose_detected": True,
+                        "n_poses": n_poses,
+                        "subject_jump": False,
+                        "seg_type": seg.get("type", ""),
+                        "seg_label": seg.get("label", ""),
+                        **candidate_angles,
+                    }
+
+                pending_candidate_rows.append({
+                    "frame": frame_idx,
+                    "candidates": candidate_rows,
+                    "n_poses": n_poses,
+                    "seg_type": seg.get("type", ""),
+                    "seg_label": seg.get("label", ""),
+                })
+
+                # Once the tracker locks, recover the selected person's observation history.
+                if person_tracker.locked:
+                    selected_id = person_tracker.selected_track_id
+
+                    for buffered_frame in pending_candidate_rows:
+                        selected_row = buffered_frame["candidates"].get(selected_id)
+
+                        if selected_row is not None:
+                            rows.append(selected_row)
+                            n_detected += 1
+                        else:
+                            rows.append({
+                                "frame": buffered_frame["frame"],
+                                "time_s": buffered_frame["frame"] / fps,
+                                "pose_detected": False,
+                                "n_poses": buffered_frame["n_poses"],
+                                "subject_jump": False,
+                                "seg_type": buffered_frame["seg_type"],
+                                "seg_label": buffered_frame["seg_label"],
+                            })
+
+                    pending_candidate_rows.clear()
+
+                frame_idx += 1
+                continue
+
+            # Normal processing after selection is locked (or for non-exercise segments).
+            if subj_idx is not None:
                 n_detected += 1
-                subj_idx = largest_bbox_pose_index(poses)
                 img_lm = poses[subj_idx]
-                wld_lm = world_poses[subj_idx] if subj_idx < len(world_poses) else None
+                wld_lm = (
+                    world_poses[subj_idx]
+                    if subj_idx < len(world_poses)
+                    else None
+                )
+                pose_detected = True
             else:
                 img_lm = None
                 wld_lm = None
+                pose_detected = False
 
-            # subject_jump diagnostic
             hip_mid = hip_midpoint_norm(img_lm)
             subject_jump = False
+
             if hip_mid is not None and prev_hip_mid is not None:
                 dx = hip_mid[0] - prev_hip_mid[0]
                 dy = hip_mid[1] - prev_hip_mid[1]
                 subject_jump = math.sqrt(dx * dx + dy * dy) > 0.2
-            if hip_mid is not None:
-                prev_hip_mid = hip_mid
-            else:
-                prev_hip_mid = None
 
-            seg = seg_at_frame.get(frame_idx, {})
+            prev_hip_mid = hip_mid
+
             angle_row = _compute_angles_for_frame(
                 img_lm, wld_lm, width, height, vis_thresh
             )
             _apply_vis_mask(angle_row, vis_thresh)
 
-            # best-side columns are computed after collecting all rows
             row = {
                 "frame": frame_idx,
                 "time_s": frame_idx / fps,
@@ -508,6 +756,7 @@ def extract_video_angles(
             }
             rows.append(row)
             frame_idx += 1
+           
 
     cap.release()
 
