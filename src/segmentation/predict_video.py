@@ -125,8 +125,12 @@ def predict(
     rf = bundle["model"]
     feature_cols: list[str] = bundle["feature_cols"]
     fill_values: dict = bundle["fill_values"]
-    print(f"Model: RandomForest ({len(rf.estimators_)} trees), "
-          f"{len(feature_cols)} features")
+    clf_desc = type(rf).__name__
+    if hasattr(rf, "estimators_"):
+        clf_desc += f" ({len(rf.estimators_)} trees)"
+    elif hasattr(rf, "_predictors"):          # HistGradientBoosting internal
+        clf_desc += f" (HistGB)"
+    print(f"Model: {clf_desc}, {len(feature_cols)} features")
 
     # ---- 3. Load smoothing params ----------------------------------------
     if not params_path.exists():

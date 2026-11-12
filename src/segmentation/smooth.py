@@ -54,7 +54,7 @@ def _apply_low_confidence(labels: list[str], confs: list[float], tau: float) -> 
     """
     out = list(labels)
     for i in range(1, len(out)):
-        if confs[i] < tau:
+        if confs[i] < tau and out[i] != "transition":
             out[i] = out[i - 1]
     return out
 
@@ -63,16 +63,17 @@ def _enforce_min_len(labels: list[str], min_len: float) -> list[str]:
     """Absorb runs shorter than ``min_len`` windows into a neighbour.
 
     A short run (length ``< min_len``) is absorbed into the previous run; if it
-    is the first run it is absorbed into the next run instead. Absorption is
-    applied iteratively: after each absorption the runs are recomputed, so a
-    short run is always absorbed into the *current* previous run (which may have
-    grown from an earlier absorption). This is deterministic and terminates
-    because every absorption strictly reduces the number of runs.
+    is the first run it is absorbed into the next run instead. The previous run
+    may be a ``transition`` — that is intentional: a short exercise blip
+    sandwiched between transitions (e.g. ``transition | squat(2) | transition``)
+    is folded into the preceding transition rather than being left as a spurious
+    exercise segment. Absorption is applied iteratively: after each absorption
+    the runs are recomputed, so a short run is always absorbed into the
+    *current* previous run. This is deterministic and terminates because every
+    absorption strictly reduces the number of runs.
 
-    Exception: ``transition`` runs are never absorbed regardless of length.
-    Transitions are genuinely short by design (a few seconds of rest between
-    exercises), so forcing them to meet ``min_len`` would erase real rest
-    periods and merge adjacent exercise segments incorrectly.
+    Exception: ``transition`` runs are never themselves absorbed regardless of
+    length, since transitions are genuinely short by design.
     """
     if not labels or min_len <= 1:
         return list(labels)
@@ -81,26 +82,52 @@ def _enforce_min_len(labels: list[str], min_len: float) -> list[str]:
         runs = _runs(out)
         if len(runs) <= 1:
             break
-        # Find the first short run that is NOT transition, and whose absorption
-        # target neighbour is also NOT transition (absorbing into a transition
-        # run would grow it and then cause the far-side exercise run to be
-        # swallowed by the enlarged transition in the next iteration).
+        # Find the first short run that is NOT a transition.
         idx = None
         for k, (lab, s, e) in enumerate(runs):
             if (e - s) < min_len and lab != "transition":
-                neighbour_label = runs[1][0] if k == 0 else runs[k - 1][0]
-                if neighbour_label != "transition":
-                    idx = k
-                    break
+                idx = k
+                break
         if idx is None:
             break
         _lab, s, e = runs[idx]
         if idx == 0:
-            new_label = runs[1][0]        # absorb the first run into the next run
+            new_label = runs[1][0]         # absorb first run into the next run
         else:
-            new_label = runs[idx - 1][0]  # absorb into the previous run
+            new_label = runs[idx - 1][0]   # absorb into the previous run (may be transition)
         for k in range(s, e):
             out[k] = new_label
+    return out
+
+
+def _merge_sandwiched_transitions(labels: list[str]) -> list[str]:
+    """Relabel transition runs that are sandwiched between identical exercises.
+
+    If a run of ``transition`` windows has the same exercise label on both
+    sides (e.g. ``push_up | transition | push_up``), it is relabelled to that
+    exercise, merging the two exercise runs into one. Applied iteratively so
+    chains like ``push_up | T | push_up | T | push_up`` are fully collapsed.
+    Transitions at the start or end of the sequence (no neighbour on one side)
+    are left untouched.
+    """
+    out = list(labels)
+    while True:
+        runs = _runs(out)
+        changed = False
+        for k, (lab, s, e) in enumerate(runs):
+            if lab != "transition":
+                continue
+            if k == 0 or k == len(runs) - 1:
+                continue
+            left_label = runs[k - 1][0]
+            right_label = runs[k + 1][0]
+            if left_label == right_label and left_label != "transition":
+                for i in range(s, e):
+                    out[i] = left_label
+                changed = True
+                break  # recompute runs
+        if not changed:
+            break
     return out
 
 
@@ -137,6 +164,7 @@ def smooth(
     assert len(labels) == len(confs), "labels and confs must have the same length"
     labels = _apply_low_confidence(labels, confs, tau)
     labels = _enforce_min_len(labels, min_len)
+    labels = _merge_sandwiched_transitions(labels)
     return labels
 
 
