@@ -107,14 +107,23 @@ def evaluate_video(
         pairs_s = [(a / fps, b / fps) for a, b in seg["rep_pairs_out"]]
         annotated = len(pairs_s)
 
+        use_3d = args.use_3d
+        fracs = tuple(args.fracs) if args.fracs else None
+
+        if exercise == "squat":
+            use_3d = args.squat_3d or args.use_3d
+
+            if args.squat_fracs:
+                fracs = tuple(args.squat_fracs)
+
         out = count_for_exercise(
             df,
             exercise,
             start_s,
             end_s,
-            use_3d=args.use_3d,
+            use_3d=use_3d,
             mode=args.mode,
-            fracs=tuple(args.fracs) if args.fracs else None,
+            fracs=fracs,
             end_pad_s=args.pad,
         )
 
@@ -213,11 +222,19 @@ def main() -> None:
     p.add_argument("--mode", choices=["adaptive", "fixed"], default=None)
     p.add_argument("--fracs", nargs=2, type=float, default=None)
     p.add_argument("--use-3d", action="store_true")
+    p.add_argument("--squat-3d", action="store_true")
+    p.add_argument("--squat-left-only", action="store_true")
+    p.add_argument("--squat-smooth", type=float, default=None)
+    p.add_argument("--squat-fracs", nargs=2, type=float, default=None)
     p.add_argument("--pad", type=float, default=0.0,
                    help="seconds added to the end of each segment window")
     p.add_argument("--tol", type=float, default=0.3,
                    help="matching tolerance in seconds")
     args = p.parse_args()
+    if args.squat_smooth is not None:
+        EXERCISES["squat"]["smooth_s"] = args.squat_smooth
+    if args.squat_left_only:
+        EXERCISES["squat"]["columns"] = ("knee_L",)
 
     if "test" in args.splits:
         logger.warning("Evaluating on TEST. Only do this for the final numbers.")
