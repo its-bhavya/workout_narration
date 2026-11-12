@@ -7,7 +7,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from counter import (  # noqa: E402
+from rep_counter import (  # noqa: E402
     clean_signal, count_for_exercise, drop_close, run_state_machine,
     sampling_rate,
 )

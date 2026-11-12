@@ -61,11 +61,13 @@ Silent video
   -> joint angles, low-visibility values set to NaN, short gaps interpolated
   -> sliding windows (1-2 s, 50% overlap) -> window classifier
        classes: squat | push_up | jump_jack | transition
-  -> post-processing (OnlineTAS-style): confidence threshold + minimum
-       segment length -> keep previous label; merge identical neighbours
+  -> post-processing (OnlineTAS-style): low-confidence filtering (preserve
+       transitions), minimum segment length enforcement, merge sandwiched
+       transitions between identical exercises
   -> segments: [{exercise, start_time, end_time}, ...]
   -> per-segment rep counting (peak/valley on the angle signal, one unified
-       cyclical state machine, counter resets per segment)
+       cyclical state machine with temporal confirmation, counter resets
+       per segment)
   -> events (segment start, rep done, milestone, transition)
   -> template-based narration text (+ transition phrases)
   -> TTS (Coqui or gTTS; Bark rejected as too heavy) -> audio aligned to
@@ -74,7 +76,7 @@ Silent video
 
 **Why pose-only features.** The classifier sees joint angles, not pixels, so background, lighting and subject differences between stitched clips cannot be exploited. This is the argument that makes synthetic stitching defensible. It must be stated in the paper.
 
-**Window classifier.** Start with Random Forest or SVM on angle features. Move to a small 1D-CNN or LSTM only if there is a clear gain. Augmentation (training windows only): left/right mirroring, time-warp 0.8x to 1.2x, small noise on angles.
+**Window classifier.** Classifier sweep completed over 8 sklearn models (RF, ExtraTrees, GBT, HistGBT, LR, SVM, KNN, MLP). The `train.py` pipeline supports any of these via `--model`. LR achieves the best test Edit Score (63.4); HistGBT with improved smoothing reaches 64.1; RF has the best boundary precision (F1@25=0.629). A small 1D-CNN or LSTM is still a future option if there is a clear gain. Augmentation (training windows only): left/right mirroring, time-warp 0.8x to 1.2x, small noise on angles — not yet applied.
 
 **Joint angles (DECIDED, details OPEN).**
 - squat: knee angle (hip, knee, ankle)
@@ -171,21 +173,26 @@ Columns used by the scripts: `sample_id, video_id, split, exercise, count, downl
 | 5 | Pass/review/fail thresholds | `apply_quality_thresholds.py` -> `quality_screening.csv` | VERIFIED |
 | 6 | Grouped, leakage-checked splits | `build_splits.py` -> `splits.csv` | VERIFIED (on both sources; rerun needed after O1) |
 | 7 | Cross-source duplicate finder | `find_cross_source_duplicates.py` | PROVIDED (run status on real data unknown) |
-| 8 | Segmentation pipeline + classifier sweep | `make_windows.py` → `train.py` → `evaluate.py` → `hparam_sweep.py`, orchestrated by `run_all.py`; outputs: `windows.csv`, `rf_model.joblib`, `window_predictions_{val,test}.csv`, `results.csv`, `test_segments.json`, `chosen_params.json`, `timeline_example.png`, `runs_log.csv`, `sweep_results.csv` | **VERIFIED** on the synthetic dataset. Val ≈ stu10; test ≈ stu2/stu4. Smoothing params (tau, min_len) chosen by val grid search, never touching test. Classifier sweep (16 experiments, 8 classifiers × 2 purity thresholds) completed; LR achieves best test Edit Score (63.4); RF best F1@25 (0.629). See `src/segmentation/README.md` for full sweep table and known limitations. |
+| 8 | Segmentation pipeline + classifier sweep | `make_windows.py` → `train.py` → `evaluate.py` → `hparam_sweep.py`, orchestrated by `run_all.py`; outputs: `windows.csv`, `model.joblib`, `window_predictions_{val,test}.csv`, `results.csv`, `test_segments.json`, `chosen_params.json`, `timeline_example.png`, `runs_log.csv`, `sweep_results.csv` | **VERIFIED** on the synthetic dataset. Val ≈ stu10; test ≈ stu2/stu4. Smoothing params (tau, min_len) chosen by val grid search, never touching test. Classifier sweep (16 experiments, 8 classifiers × 2 purity thresholds) completed; LR achieves best test Edit Score (63.4); RF best F1@25 (0.629). The `train.py` pipeline now supports `--model` for all 8 classifiers. Smoothing improved (transition preservation, sandwiched-transition merging); with HistGradientBoosting + improved smoothing, test Edit score reached 64.1 and transition frame-F1 improved from 0.36 to 0.50. See `src/segmentation/README.md` and `outputs/segmentation/smoothing_improvement_report.md` for full details. |
+| 9 | End-to-end integration: segmentation + rep counting + narration formatting | `src/pipeline/` (`pipeline.py`, `models.py`, `extractor.py`, `narration_formatter.py`, `display.py`), `main.py`, `tests/test_pipeline.py` | **VERIFIED**. Given any multi-exercise video/ID/CSV: sliding-window TAS segmentation + OnlineTAS smoothing -> per-segment rep counting with boundary padding -> structured workout summary, per-rep timestamps, pacing, and timestamp-aligned narration cue sheet. Exportable as JSON or formatted report. Tested and verified on synthetic videos. |
 
 ### 5.6 Rep counting (`rep_counter.py`, `evaluate_rep_counts.py`) — VERIFIED on train + val
 
-Rule-based counter. No learned model. Pipeline per segment: slice angle CSV to `[start_s, end_s]`, pick signal (best side or mean of both arms), mask long tracking gaps, interpolate short ones, smooth with Savitzky-Golay, run a two-threshold hysteresis state machine, drop reps closer than `min_gap_s`.
+Rule-based counter. No learned model. Pipeline per segment: slice angle CSV to `[start_s, end_s]`, pick signal (best side or mean of both arms), mask long tracking gaps, interpolate short ones, smooth with Savitzky-Golay, run a two-threshold hysteresis state machine with temporal confirmation, drop reps closer than `min_gap_s`.
+
+**Temporal confirmation (`confirm_s`):** A threshold crossing must hold for a set duration (0.15 s squat, 0.10 s push_up, 0.15 s jump_jack) before a rep is counted. NaN (lost tracking) cancels a pending completion. This filters brief false crossings from pose jitter without changing the thresholds themselves.
 
 Evaluated on 119 exercise segments across train and val synthetic videos (ground-truth segment windows, adaptive thresholds):
 
-| exercise | segments | exact_% | within1_% | MAE | bias |
-|----------|----------|---------|-----------|-----|------|
-| squat | 37 | 67.6 | 75.7 | 2.0 | -1.3 |
-| jump_jack | 45 | 45.0 | 71.1 | 1.7 | -1.4 |
-| push_up | 37 | 46.0 | 62.2 | 2.6 | -0.6 |
+| exercise | segments | exact_% | within1_% | MAE | bias | precision | recall |
+|----------|----------|---------|-----------|-----|------|-----------|--------|
+| squat | 37 | 64.9 | 75.7 | 2.2 | -1.9 | 0.98 | 0.80 |
+| jump_jack | 45 | 57.8 | 84.4 | 2.3 | -2.0 | 0.99 | 0.91 |
+| push_up | 37 | 48.6 | 59.5 | 2.9 | -1.0 | 0.93 | 0.89 |
 
-Val squat and jump_jack reach 100% within-1. Val push_up is pulled down by one outlier (`stu10_49.mp4`, annotated 21, counted 43). This is a multi-person clip: the counter locks onto a secondary subject's oscillating signal and fires twice per real rep. This is a known limitation of the current single-subject selection — `largest_bbox_pose_index` handles it for synthetic videos; needs confirming for raw RepCount clips.
+The `confirm_s` temporal confirmation improved jump_jack exact-match from 45% to 58% and within-1 from 71% to 84% vs the previous (no-confirmation) run. Undercounting bias increased slightly (the counter is more conservative). Val squat is clean (87.5% exact, 0.25 MAE). Val push_up is still pulled down by one outlier (`stu10_49.mp4`, annotated 21, counted 43). This is a multi-person clip: the counter locks onto a secondary subject's oscillating signal and fires twice per real rep.
+
+**Multi-person tracking (`PosePersonTracker`):** A `PosePersonTracker` class in `pose_utils.py` was added to `extract_pose_features.py` to address this. It assigns persistent track IDs across frames (greedy centre-distance + IoU matching), observes all candidates for an observation window, then locks onto the person with the most exercise-relevant movement × visibility. During the observation phase it temporarily uses `largest_bbox_pose_index`. If the locked track is lost it unlocks and re-observes. **Status:** Implemented in the extraction code, but the synthetic angle CSVs have NOT been re-extracted with this yet, so the `stu10_49` overcounting persists in current results. Re-extraction is the next step.
 
 Two segments correctly abstained with `low_motion` flag (stu6_62 squat, stu6_19 jump_jack — insufficient angle range). Full results and calibration tables in `src/rep_counting/README.md` and `outputs/rep_eval/segments.csv`.
 
@@ -248,8 +255,11 @@ Observation: Countix is noisier than RepCount, especially squat (about 26% quali
 | D10 | Screening only measures; thresholds applied separately | pick cutoffs from distributions |
 | D11 | `uv` for dependencies; Colab plus shared Drive for compute and video storage | team setup |
 | D12 | Segmentation window = 2.0 s, stride = 1.0 s (50 % overlap) | 2 s captures a full rep at typical pace; 50 % overlap provides dense coverage without excessive redundancy; tuned on val, never on test |
-| D13 | Smoothing tau = 0.5 (chosen by val grid search over {0.4, 0.5, 0.6, 0.7}), min_len = 2 (grid {1,2,3,4}) | val grid-search maximising Edit score, tie-broken by frame accuracy; written to `outputs/segmentation/chosen_params.json` |
+| D13 | Smoothing tau = 0.7, min_len = 2 (chosen by val grid search over {0.4, 0.5, 0.6, 0.7} × {1,2,3,4}) | val grid-search maximising Edit score, tie-broken by frame accuracy; written to `outputs/segmentation/chosen_params.json`. min_len lowered from 4 to 2 after the smoothing improvements (transition preservation + sandwiched-transition merging) made the `_enforce_min_len` logic more aggressive on its own |
 | D14 | Classifier sweep run over RF, ExtraTrees, GBT, HistGBT, LR, SVM, KNN, MLP × 2 purity thresholds | LR (purity=0.7, τ=0.7, min_len=4) achieves best test Edit Score (63.4); RF retained for now pending further tuning; full results in `outputs/segmentation/sweep_results.csv` |
+| D15 | `train.py` supports `--model` for all 8 classifiers from the sweep catalogue | lets any classifier from the sweep be trained as the production model without code changes; reuses `_build_classifiers` from `hparam_sweep.py`; model bundle saved as `model.joblib` (was `rf_model.joblib`) |
+| D16 | Smoothing improvements: transition labels preserved during low-confidence filtering; short exercise blips absorbed into neighbouring transitions; sandwiched transitions between identical exercises collapsed | prevents erasing intentional rest periods and avoids spurious exercise segments; improved test Edit score by +7.9 and transition frame-F1 by +0.14 with HistGBT. See `outputs/segmentation/smoothing_improvement_report.md` |
+| D17 | Multi-person tracking via `PosePersonTracker` added to `extract_pose_features.py` | addresses overcounting on multi-person clips (e.g. `stu10_49`); tracks candidates by bbox, locks onto the person with most exercise-relevant movement × visibility; implemented but synthetic angle CSVs not yet re-extracted |
 
 ### Open decisions
 - **O1. Keep Countix?** Leaning toward dropping it. RepCount alone gives about 340 usable clips (109 jump_jack, 114 push_up, 117 squat); expected splits at 65/10/25 are roughly train 71/74/76, val 11/11/12, test 27/28/29. Test is about 10 to 15 independent subject groups, so report group counts and intervals, consider grouped 5-fold cross-validation for final numbers, and state "in-the-wild testing" as future work. Dropping it removes the duplicate problem entirely. To apply: filter `df = df[df["source"] == "repcount"]` in `build_splits.py`. Countix screening results stay available as a later extra pool.
@@ -257,7 +267,7 @@ Observation: Countix is noisier than RepCount, especially squat (about 26% quali
 - **O3. How to produce idle footage** between exercises. Options: (a) real idle frames, e.g. frames before the first and after the last rep boundary in RepCount clips if they show setup/rest (UNVERIFIED); (b) a frozen frame (trivial to detect, zero motion, makes the transition class too easy, would need a stated limitation). Prefer (a).
 - **O4. Camera-angle policy** (`angle_policy.py`): currently planned but likely skippable, since features are pose-only. Defer unless a result needs explaining.
 - **O5. 2D vs 3D landmarks** for angle computation; best-side selection for squat and push_up.
-- **O6. Classifier and window parameters** (RF/SVM vs 1D-CNN; window and stride; smoothing thresholds). Classifier sweep completed (see D14 and section 5 step 8). Best result: LR (purity=0.7, τ=0.7, min_len=4) at test Edit=63.4; RF has best boundary precision (F1@25=0.629). Window=2.0 s / stride=1.0 s locked (D12). Open: whether to adopt LR or RF as the reported model for the paper, and whether to try LightGBM or a sequence model (RNN/LSTM over windows) for further gains.
+- **O6. Classifier and window parameters.** Classifier sweep completed (see D14 and section 5 step 8). Best result: LR (purity=0.7, τ=0.7, min_len=4) at test Edit=63.4; RF has best boundary precision (F1@25=0.629); HistGBT with improved smoothing reaches test Edit=64.1. Window=2.0 s / stride=1.0 s locked (D12). The `train.py` pipeline now supports `--model` for all 8 classifiers (D15). Open: which classifier to report as the production model for the paper, and whether to try LightGBM or a sequence model (RNN/LSTM over windows) for further gains.
 
 ---
 
@@ -318,7 +328,7 @@ Professor check-in deliverables: Week 1 scope plus dataset plus pose demo; Week 
 8. **Synthetic transitions are artificial**, and RepCount footage is cleaner than real gym video. State both in Limitations.
 9. Duplicate finder recall is imperfect (crops, flips, overlays). A planned second check compares joint-angle sequences across splits after pose extraction.
 10. Within RepCount, YouTube-numbered clips from the same source video could still land in different splits.
-11. **Multi-person clips in raw RepCount** (e.g. `stu10_49.mp4`) cause overcounting: the counter can lock onto a secondary subject. `largest_bbox_pose_index` in `extract_pose_features.py` selects the largest-bounding-box pose for synthetic videos; this selection needs to be confirmed/applied uniformly when raw RepCount clips are fed directly to the counter. Until then, any raw clip with a significant secondary person will produce inflated rep counts.
+11. **Multi-person clips in raw RepCount** (e.g. `stu10_49.mp4`) cause overcounting: the counter can lock onto a secondary subject. `PosePersonTracker` was added to `extract_pose_features.py` to address this — it tracks candidates by bounding box, observes movement for an observation window, then locks onto the person with the most exercise-relevant movement × visibility. **Status: implemented but not yet applied.** The synthetic angle CSVs have not been re-extracted with `PosePersonTracker` yet, so the overcounting persists in current evaluation results. Re-extraction is the next step.
 
 ---
 
@@ -350,8 +360,13 @@ Related Work groups (details in the team's literature review CSVs): temporal act
 | `build_splits.py` | grouped 65/10/25 splits | `SPLIT_FRACTIONS`, `SEED`, `REPCOUNT_YOUTUBE_MAP_PATH`, `EXCLUDE_CLIPS_PATH` |
 | `find_cross_source_duplicates.py` | find RepCount/Countix duplicates | `MAX_HAMMING`, `HIGH_SCORE`, `REVIEW_SCORE`, `FRAMES_PER_CLIP` |
 | `src/segmentation/make_windows.py` | build `windows.csv` from angle CSVs | `WINDOW_S=2.0`, `STRIDE_S=1.0`, `MIN_ROWS_FRAC=0.5` |
-| `src/segmentation/train.py` | train RF classifier, write per-window predictions + run archive | `N_ESTIMATORS=200`, `CLASS_WEIGHT="balanced"`, `MIN_PURITY_TRAIN=0.8` |
+| `src/segmentation/train.py` | train classifier (8 types via `--model`), write per-window predictions + run archive | `--model` (rf, extra_trees, gbt, hist_gbt, lr, svm, knn, mlp; default rf), reuses `hparam_sweep._build_classifiers`; model saved as `model.joblib` |
 | `src/segmentation/evaluate.py` | val grid-search (tau × min_len), test evaluation, timeline plot | `TAU_GRID`, `MIN_LEN_GRID` |
 | `src/segmentation/hparam_sweep.py` | sweep 8 classifiers × purity thresholds × smoothing grid; ranked results table | `--quick`, `--classifiers`, `--min-purity-grid`, `--tau-grid`, `--min-len-grid` |
+| `src/segmentation/smooth.py` | post-process window labels: low-confidence filtering, min-length enforcement, sandwiched-transition merging | `_apply_low_confidence` (preserves transitions), `_enforce_min_len`, `_merge_sandwiched_transitions` |
+| `src/segmentation/predict_video.py` | run trained model on a single video, produce segments | loads `model.joblib` + `chosen_params.json`; dynamic classifier description |
 | `src/segmentation/run_all.py` | orchestrator: make_windows → train → evaluate | `--tag`, `--skip-windows` |
+| `src/data_pipeline/pose_utils.py` | pose geometry helpers + `PosePersonTracker` for multi-person tracking | `PosePersonTracker(observation_frames=45, min_observations=15, max_missed_frames=10)` |
+| `tests/test_person_tracker.py` | tests for `PosePersonTracker` (ID assignment, movement scoring, recovery, clip start frame) | run: `python -m pytest tests/test_person_tracker.py -v` |
+| `tests/test_rep_counter.py` | tests for `run_state_machine` temporal confirmation (complete reps, brief crossings, NaN cancellation) | run: `python -m pytest tests/test_rep_counter.py -v` |
 | narration, evaluation | NOT STARTED | see section 7 |

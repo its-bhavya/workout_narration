@@ -37,6 +37,7 @@ Pipeline per segment:
 - `count_for_exercise(df, exercise, start_s, end_s)` is the single entry point. One call per segment.
 - Adaptive thresholds by default: placed at fixed fractions of the segment's own p10..p90 angle range, so camera angle and subject variation don't require manual re-tuning per clip.
 - Falls back to the second side if the preferred side is mostly missing or shows no real motion (`low_motion` flag).
+- **Temporal confirmation (`confirm_s`):** a threshold crossing must hold for `confirm_s` seconds before a rep is counted. NaN (lost tracking) cancels a pending completion. This filters brief false crossings from pose jitter. Added November 2026; improved jump_jack exact-match from 45% to 58%.
 
 ### Exercise configuration (EXERCISES dict)
 
@@ -50,8 +51,11 @@ Pipeline per segment:
 | smooth_s | 0.5 s | 0.1 s | 0.3 s |
 | min_gap_s | 0.5 s | 0.2 s | 0.5 s |
 | min_range_deg | 25° | 20° | 40° |
+| confirm_s | 0.15 s | 0.10 s | 0.15 s |
 
 `min_range_deg` guards against counting reps in a motionless or mis-labelled segment.
+`confirm_s` requires a threshold crossing to persist for a set duration before a rep
+is registered, filtering out brief jitter-induced crossings.
 
 ### Flags
 
@@ -98,41 +102,63 @@ uv run python src/rep_counting/evaluate_rep_counts.py
 # try different fracs
 uv run python src/rep_counting/evaluate_rep_counts.py --mode adaptive --fracs 0.3 0.7
 
+# squat-specific tuning (per-exercise overrides, added November 2026)
+uv run python src/rep_counting/evaluate_rep_counts.py --squat-3d --squat-fracs 0.3 0.7
+uv run python src/rep_counting/evaluate_rep_counts.py --squat-left-only --squat-smooth 0.3
+
 # final numbers only (do once, at the end)
 uv run python src/rep_counting/evaluate_rep_counts.py --splits test
 ```
+
+Per-exercise override flags (added November 2026) let you tune squat without
+affecting push_up or jump_jack: `--squat-3d` (use 3D angles), `--squat-left-only`
+(track left knee only), `--squat-smooth <s>` (override smoothing window),
+`--squat-fracs <lo> <hi>` (override adaptive threshold fractions).
 
 ---
 
 ## Results (train + val, adaptive mode, ground-truth segments)
 
-Evaluated on 119 segments across train and val synthetic videos (October 2026).
+Evaluated on 119 segments across train and val synthetic videos (November 2026,
+with temporal confirmation `confirm_s`).
 
 ### Combined train + val
 
 | exercise | segments | exact_% | within1_% | MAE | bias | precision | recall | flagged_% |
 |----------|----------|---------|-----------|-----|------|-----------|--------|-----------|
-| jump_jack | 45 | 45.0 | 71.11 | 1.73 | -1.42 | 0.99 | 0.94 | 2.22 |
-| push_up | 37 | 45.95 | 62.16 | 2.57 | -0.57 | 0.93 | 0.90 | 0.00 |
-| squat | 37 | 67.57 | 75.68 | 2.00 | -1.30 | 0.94 | 0.82 | 2.70 |
+| jump_jack | 45 | 57.78 | 84.44 | 2.31 | -2.04 | 0.99 | 0.91 | 2.22 |
+| push_up | 37 | 48.65 | 59.46 | 2.86 | -0.97 | 0.93 | 0.89 | 0.00 |
+| squat | 37 | 64.86 | 75.68 | 2.19 | -1.92 | 0.98 | 0.80 | 2.70 |
 
 ### Train only
 
 | exercise | segments | exact_% | within1_% | MAE | bias | precision | recall | flagged_% |
 |----------|----------|---------|-----------|-----|------|-----------|--------|-----------|
-| jump_jack | 36 | 69.44 | 80.56 | 2.11 | -1.78 | 0.99 | 0.93 | 2.78 |
-| push_up | 30 | 50.00 | 63.33 | 2.07 | -1.20 | 0.96 | 0.90 | 0.00 |
-| squat | 29 | 65.52 | 68.97 | 2.48 | -1.72 | 0.94 | 0.80 | 3.45 |
+| jump_jack | 36 | 55.56 | 80.56 | 2.81 | -2.53 | 0.99 | 0.91 | 2.78 |
+| push_up | 30 | 50.00 | 60.00 | 2.43 | -1.63 | 0.97 | 0.88 | 0.00 |
+| squat | 29 | 58.62 | 72.41 | 2.72 | -2.38 | 0.97 | 0.77 | 3.45 |
 
 ### Val only
 
 | exercise | segments | exact_% | within1_% | MAE | bias | precision | recall | flagged_% |
 |----------|----------|---------|-----------|-----|------|-----------|--------|-----------|
-| jump_jack | 9 | 77.78 | 100.00 | 0.22 | 0.00 | 0.99 | 0.99 | 0.00 |
-| push_up | 7 | 28.57 | 57.14 | 4.71 | 2.14 | 0.81 | 0.91 | 0.00 |
-| squat | 8 | 75.00 | 100.00 | 0.25 | 0.25 | 0.92 | 0.96 | 0.00 |
+| jump_jack | 9 | 66.67 | 100.00 | 0.33 | -0.11 | 0.99 | 0.98 | 0.00 |
+| push_up | 7 | 42.86 | 57.14 | 4.71 | 1.86 | 0.81 | 0.90 | 0.00 |
+| squat | 8 | 87.50 | 87.50 | 0.25 | -0.25 | 1.00 | 0.96 | 0.00 |
 
-Val squat and jump_jack are clean (100% within-1). Val push_up is dragged down entirely by one outlier: `stu10_49.mp4` (annotated 21, counted 43 — 2× overcounting). Inspection shows this clip contains multiple people in frame; the counter locks onto a secondary subject's oscillating signal and fires twice per actual rep. This is a known multi-person artefact and will be addressed when the pipeline gains a consistent single-subject selection rule (already implemented in `extract_pose_features.py` via `largest_bbox_pose_index` for synthetic videos; needs to be confirmed for raw RepCount clips).
+**Change from previous run (no `confirm_s`):** jump_jack exact-match improved
+from 45.0% to 57.8% and within-1 from 71.1% to 84.4% — the temporal confirmation
+filters false crossings that were inflating rep counts. Precision is unchanged
+(0.99) and recall dropped slightly (0.94 → 0.91), confirming the counter is more
+conservative (fewer false positives, slightly more misses). Undercounting bias
+increased across all exercises as a result.
+
+Val squat is strong (87.5% exact, 0.25 MAE). Val push_up is still dragged down
+entirely by one outlier: `stu10_49.mp4` (annotated 21, counted 43 — 2×
+overcounting). This clip contains multiple people in frame; the counter locks
+onto a secondary subject's oscillating signal and fires twice per actual rep.
+`PosePersonTracker` was added to `extract_pose_features.py` to address this but
+the angle CSVs have not been re-extracted yet, so the overcounting persists.
 
 ### Flagged segments
 
@@ -145,16 +171,16 @@ Val squat and jump_jack are clean (100% within-1). Val push_up is dragged down e
 
 | video | exercise | clip | annotated | counted | flag |
 |-------|----------|------|-----------|---------|------|
-| synth_train_0014 | jump_jack | stu5_25.mp4 | 68 | 29 | |
+| synth_train_0014 | jump_jack | stu5_25.mp4 | 68 | 20 | |
 | synth_val_0001 | push_up | stu10_49.mp4 | 21 | 43 | |
 | synth_train_0023 | squat | stu6_62.mp4 | 20 | 0 | low_motion |
+| synth_train_0003 | push_up | stu6_41.mp4 | 54 | 37 | |
 | synth_train_0022 | jump_jack | stu6_19.mp4 | 16 | 0 | low_motion |
-| synth_train_0003 | push_up | stu6_41.mp4 | 54 | 41 | |
-| synth_train_0019 | push_up | stu9_50.mp4 | 65 | 54 | |
-| synth_train_0003 | squat | stu6_62.mp4 | 20 | 9 | |
-| synth_train_0007 | squat | stu5_67.mp4 | 16 | 6 | |
-| synth_train_0017 | push_up | stu9_50.mp4 | 65 | 55 | |
-| synth_train_0001 | squat | stu6_62.mp4 | 20 | 11 | |
+| synth_train_0003 | squat | stu6_62.mp4 | 20 | 5 | |
+| synth_train_0019 | push_up | stu9_50.mp4 | 65 | 52 | |
+| synth_train_0001 | squat | stu6_62.mp4 | 20 | 8 | |
+| synth_train_0017 | jump_jack | stu3_23.mp4 | 38 | 27 | |
+| synth_train_0017 | push_up | stu9_50.mp4 | 65 | 54 | |
 
 The two `low_motion` flags (stu6_62 squat, stu6_19 jump_jack) are correct abstentions — those clips have insufficient angle range for the counter to fire. The `stu10_49` overcounting and `stu5_25` undercounting are the main cases to investigate with sanity_plots.
 
@@ -182,7 +208,8 @@ Current `min_range_deg` values are set safely below the p05 in all three cases.
 
 ## Known issues / next steps
 
-- `stu10_49` push_up overcounts 2×: multi-person clip — a secondary subject's signal causes double-firing. `largest_bbox_pose_index` in `extract_pose_features.py` handles this for synthetic videos; needs to be confirmed/applied for raw RepCount clips. Tracked as a known limitation until single-subject selection is enforced end-to-end.
-- `stu5_25` jump_jack undercounts (68 → 29): very high rep-count clip, likely the adaptive fracs cut too low. Try narrowing fracs or checking the raw angle trace.
+- `stu10_49` push_up overcounts 2×: multi-person clip — a secondary subject's signal causes double-firing. `PosePersonTracker` was added to `extract_pose_features.py` to address this: it tracks candidates by bounding box, observes movement for an observation window, then locks onto the person with the most exercise-relevant movement × visibility. **Status: implemented but angle CSVs not yet re-extracted.** Re-running `extract_pose_features.py` on synthetic videos is the next step to verify the fix.
+- `stu5_25` jump_jack undercounts (68 → 20): very high rep-count clip, likely the adaptive fracs cut too low. The temporal confirmation (`confirm_s`) made this slightly worse (was 29, now 20). Try narrowing fracs or checking the raw angle trace.
 - `stu6_62` squat flags `low_motion` in three separate synthetic videos — the source clip may have an unusually small range; worth checking if it should be excluded from the pool.
+- Temporal confirmation improved jump_jack exact-match (+12.8 pp) but increased undercounting bias across all exercises. If the bias is too high for the paper, `confirm_s` can be tuned per exercise or made adaptive.
 - Test split is locked; do not evaluate until the method is final.

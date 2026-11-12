@@ -28,9 +28,16 @@ raw-vs-smoothed results table.  Optional flags:
 
 ```
 python src/segmentation/make_windows.py          # build windows.csv
-python src/segmentation/train.py [--tag "label"] # train classifier, write predictions
+python src/segmentation/train.py [--model hist_gbt] [--tag "label"] # train classifier, write predictions
 python src/segmentation/evaluate.py              # grid-search val, eval test, print table
 ```
+
+The `--model` argument (added November 2026) selects from 8 classifiers:
+`rf` (default), `extra_trees`, `gbt`, `hist_gbt`, `lr`, `svm`, `knn`, `mlp`.
+It reuses the shared classifier catalogue from `hparam_sweep._build_classifiers`.
+The trained model is saved as `model.joblib` (was `rf_model.joblib`); feature
+importances are included in the report only for tree-based models that expose
+`feature_importances_`.
 
 ### Classifier + smoothing hyperparameter sweep
 
@@ -71,12 +78,42 @@ All parameters live in `config.py`. Do not hardcode them elsewhere.
 | `MIN_PURITY_TRAIN` | `0.8` | minimum label purity for a window to be eligible for training |
 | `SEED` | `42` | random seed for all reproducibility |
 | `CLASSES` | `["squat","push_up","jump_jack","transition"]` | ordered class list |
-| `N_ESTIMATORS` (train.py) | `200` | trees in the Random Forest |
-| `CLASS_WEIGHT` (train.py) | `"balanced"` | upweights minority classes |
+| `N_ESTIMATORS` (train.py) | `200` | trees in the Random Forest (RF only; other classifiers use their own defaults) |
+| `CLASS_WEIGHT` (train.py) | `"balanced"` | upweights minority classes (RF only) |
+| `--model` (train.py) | `rf` | classifier to train: `rf`, `extra_trees`, `gbt`, `hist_gbt`, `lr`, `svm`, `knn`, `mlp` |
 | `MAX_FILL_GAP_S` (features.py) | `0.5` | NaN gaps ≤ this many seconds are linearly interpolated before feature extraction |
 
 Smoothing parameters (`TAU_GRID`, `MIN_LEN_GRID` in `evaluate.py`) are searched
 on val; the best pair is written to `outputs/segmentation/chosen_params.json`.
+Current chosen params: `tau = 0.7`, `min_len = 2`.
+
+---
+
+## Smoothing pipeline (`smooth.py`)
+
+The `smooth()` function applies three post-processing steps to the per-window
+predictions (November 2026 improvements):
+
+1. **Low-confidence filtering (`_apply_low_confidence`):** Windows with
+   confidence below `tau` inherit the previous window's label. **Transitions are
+   preserved** — a low-confidence transition is never overwritten, so intentional
+   rest periods are not erased.
+
+2. **Minimum-length enforcement (`_enforce_min_len`):** Runs shorter than
+   `min_len` windows are absorbed into the previous run (or the next run if it is
+   the first). Transitions are never absorbed themselves (they are genuinely
+   short by design). A short exercise blip sandwiched between transitions is
+   absorbed into the preceding transition.
+
+3. **Sandwiched-transition merging (`_merge_sandwiched_transitions`):** A
+   transition run with the same exercise on both sides (e.g.
+   `push_up | transition | push_up`) is relabelled to that exercise, merging the
+   two runs into one. Applied iteratively so chains collapse fully.
+
+These changes improved test Edit score by +7.9 (56.2 → 64.1) and transition
+frame-F1 by +0.14 (0.36 → 0.50) with HistGradientBoosting. See
+`outputs/segmentation/smoothing_improvement_report.md` for the full before/after
+comparison.
 
 ---
 
@@ -123,8 +160,8 @@ All outputs land under `outputs/segmentation/`.
 | File | Produced by | Contents |
 |------|-------------|----------|
 | `windows.csv` | `make_windows.py` | one row per sliding window; columns below |
-| `val_window_report.txt` | `train.py` | val accuracy, macro-F1, per-class F1, confusion matrix, top-10 importances |
-| `rf_model.joblib` | `train.py` | model bundle: `model`, `feature_cols`, `fill_values`, `classes` |
+| `val_window_report.txt` | `train.py` | val accuracy, macro-F1, per-class F1, confusion matrix, top-10 importances (tree models only) |
+| `model.joblib` | `train.py` | model bundle: `model`, `feature_cols`, `fill_values`, `classes` (was `rf_model.joblib`) |
 | `window_predictions_val.csv` | `train.py` | per-window val predictions + class probabilities |
 | `window_predictions_test.csv` | `train.py` | per-window test predictions + class probabilities |
 | `runs_log.csv` | `train.py` | one row per run; config + window counts + all val metrics |
@@ -202,10 +239,13 @@ synthetic video.  Segments are non-overlapping and cover the full video duration
   The architecture section of the project context mentions left/right mirroring
   and time-warp as planned augmentations; these have not been applied.
 
-- **No deep model.** The classifier is a `RandomForestClassifier` on
-  hand-crafted angle statistics.  A 1D-CNN or LSTM over the raw angle sequences
-  would likely improve `transition` recall and boundary precision, but is left as
-  future work.
+- **No deep model.** The classifier is a sklearn model (any of the 8 types via
+  `--model`) on hand-crafted angle statistics. A 1D-CNN or LSTM over the raw
+  angle sequences would likely improve `transition` recall and boundary
+  precision, but is left as future work. The classifier sweep (D14) found that
+  Logistic Regression achieves the best test Edit Score while RF has the best
+  segment-level F1; HistGradientBoosting with improved smoothing reaches 64.1
+  Edit score.
 
 ---
 
@@ -232,6 +272,12 @@ Top features are `torso_tilt` and `arm_raise` (physically meaningful), with no
 is the weak class; the errors are boundary windows where exercise edges get read
 as transition. That is the case the smoothing / minimum-segment-length step is
 meant to clean up, so a low raw-transition score is expected.
+
+> **Current production model:** `HistGradientBoostingClassifier` (selected via
+> the `--model hist_gbt` argument). The top-level `outputs/segmentation/model.joblib`
+> and `results.csv` reflect this model with the improved smoothing (tau=0.7,
+> min_len=2). Test Edit score: 64.1, frame accuracy: 0.82. See
+> `outputs/segmentation/smoothing_improvement_report.md` for the full comparison.
 
 ---
 
@@ -277,6 +323,12 @@ Full results in `outputs/segmentation/sweep_results.csv`.
 labels, purity, that no window crosses the end, plus a short-video and a
 row-slice round-trip case.
 
+`tests/test_smooth.py` — tests for `smooth()` and `to_segments()`: low-confidence
+filtering (including transition preservation), min-length absorption (into
+preceding run, first-run into next, min_len=1 no-op, full collapse),
+flickery-sequence cleanup, segment tiling (no gaps/overlaps, covers
+`[0, video_end_s]`), boundary midpoint, and end-to-end smooth-then-segment.
+
 ```
-python -m pytest tests/test_make_windows.py -v
+python -m pytest tests/test_make_windows.py tests/test_smooth.py -v
 ```
