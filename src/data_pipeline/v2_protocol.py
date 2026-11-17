@@ -89,4 +89,4 @@ def sha256(path):
 
 
 def retired_workflow():
-    raise RuntimeError('The separate-val training/evaluation workflow is retired. Use cv.get_cv_split for source-clip CV; model training/evaluation is not authorized in Phase 4.')
+    raise RuntimeError('The separate-val workflow is retired. Use the source-clip CV train/evaluate commands documented in docs/V2_TRAINING.md.')

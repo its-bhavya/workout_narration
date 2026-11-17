@@ -1,0 +1,385 @@
+{
+  "run_id": "v2",
+  "experiment_id": "cv8_v2_seed42_p080_20261117",
+  "video_id": "synth_v2_test_0001",
+  "split": "test",
+  "video_path": "data/synthetic/test/synth_v2_test_0001.mp4",
+  "duration_s": 119.0,
+  "model_sha256": "989cf80af9e7642c9c6593f53e43c64be64a87ea4cd9bce9416fbb1f807c3e7b",
+  "selection": {
+    "model_key": "rf",
+    "min_purity_train": 0.8,
+    "tau": 0.5,
+    "min_len": 3,
+    "cv_edit_mean": 71.5373075998076,
+    "cv_edit_std": 2.897912455145347,
+    "cv_frame_accuracy_mean": 0.8510895321656005,
+    "cv_f1_at_25_mean": 0.7041903032468048
+  },
+  "evaluation_scope": "single full-video diagnostic; not aggregate test performance",
+  "narration_generated": false,
+  "parameters_tuned": false,
+  "counter_config": {
+    "squat": {
+      "columns": [
+        "knee_L",
+        "knee_R"
+      ],
+      "combine": "best",
+      "pattern": "down_up",
+      "thresholds": [
+        150.0,
+        168.0
+      ],
+      "mode": "adaptive",
+      "fracs": [
+        0.35,
+        0.65
+      ],
+      "smooth_s": 0.5,
+      "min_gap_s": 0.5,
+      "min_range_deg": 25.0,
+      "confirm_s": 0.15
+    },
+    "push_up": {
+      "columns": [
+        "elbow_L",
+        "elbow_R"
+      ],
+      "combine": "best",
+      "pattern": "down_up",
+      "thresholds": [
+        135.0,
+        148.0
+      ],
+      "mode": "adaptive",
+      "fracs": [
+        0.25,
+        0.55
+      ],
+      "smooth_s": 0.1,
+      "min_gap_s": 0.2,
+      "min_range_deg": 20.0,
+      "confirm_s": 0.1
+    },
+    "jump_jack": {
+      "columns": [
+        "arm_raise_L",
+        "arm_raise_R"
+      ],
+      "combine": "mean",
+      "pattern": "low_high_low",
+      "thresholds": [
+        60.0,
+        120.0
+      ],
+      "mode": "adaptive",
+      "fracs": [
+        0.35,
+        0.65
+      ],
+      "smooth_s": 0.3,
+      "min_gap_s": 0.5,
+      "min_range_deg": 40.0,
+      "confirm_s": 0.15
+    }
+  },
+  "counter_source_sha256": "2764f6f85c5b28fb8521a65c90a189c5e6aadb56c739dc8e99ffb083f844fada",
+  "settings": {
+    "predicted_segment_end_padding_s": 0.3,
+    "oracle_segment_end_padding_s": 0.0,
+    "max_gap_s": 0.4,
+    "min_valid_fraction": 0.5
+  },
+  "segmentation_metrics": {
+    "frame_accuracy": 0.6784214945424013,
+    "edit_score": 70.0,
+    "f1_at_10": 0.8235294117647058,
+    "f1_at_25": 0.7058823529411765,
+    "f1_at_50": 0.47058823529411764,
+    "boundary_mean_s": 3.6444444444444457,
+    "boundary_median_s": 1.1666666666666714,
+    "n_pred": 7,
+    "n_gt": 10,
+    "frame_f1_jump_jack": 0.918918918918919,
+    "frame_f1_push_up": 0.6954314720812182,
+    "frame_f1_squat": 0.9629629629629629,
+    "frame_f1_transition": 0.5456702253855279
+  },
+  "rep_counts_by_exercise": [
+    {
+      "exercise": "jump_jack",
+      "annotated": 8,
+      "segmentation_then_count": 8,
+      "end_to_end_error": 0,
+      "end_to_end_absolute_error": 0,
+      "ground_truth_segments_then_count": 7,
+      "oracle_error": -1
+    },
+    {
+      "exercise": "push_up",
+      "annotated": 34,
+      "segmentation_then_count": 18,
+      "end_to_end_error": -16,
+      "end_to_end_absolute_error": 16,
+      "ground_truth_segments_then_count": 17,
+      "oracle_error": -17
+    },
+    {
+      "exercise": "squat",
+      "annotated": 2,
+      "segmentation_then_count": 1,
+      "end_to_end_error": -1,
+      "end_to_end_absolute_error": 1,
+      "ground_truth_segments_then_count": 1,
+      "oracle_error": -1
+    }
+  ],
+  "count_summary": {
+    "annotated_total": 44,
+    "predicted_total": 27,
+    "oracle_total": 25,
+    "sum_absolute_error_by_exercise": 17,
+    "mean_absolute_error_across_three_exercises": 5.666666666666667,
+    "weighted_absolute_percentage_error": 38.63636363636363,
+    "oracle_sum_absolute_error_by_exercise": 19
+  },
+  "predicted_segments": [
+    {
+      "segment_index": 0,
+      "exercise": "push_up",
+      "start_s": 0.0,
+      "end_s": 32.5,
+      "reps": 3,
+      "rep_times": [
+        15.4,
+        21.333,
+        25.6
+      ],
+      "thresholds": [
+        97.8,
+        128.9
+      ],
+      "signal": "elbow_R",
+      "range_deg": 103.8,
+      "fs": 15.0,
+      "valid_fraction": 1.0,
+      "flag": ""
+    },
+    {
+      "segment_index": 1,
+      "exercise": "jump_jack",
+      "start_s": 32.5,
+      "end_s": 44.5,
+      "reps": 8,
+      "rep_times": [
+        33.867,
+        35.267,
+        36.6,
+        37.867,
+        40.467,
+        41.6,
+        42.667,
+        43.8
+      ],
+      "thresholds": [
+        74.4,
+        119.6
+      ],
+      "signal": "arm_raise_L+arm_raise_R",
+      "range_deg": 150.7,
+      "fs": 15.0,
+      "valid_fraction": 0.946,
+      "flag": ""
+    },
+    {
+      "segment_index": 2,
+      "exercise": "transition",
+      "start_s": 44.5,
+      "end_s": 64.5,
+      "reps": 0
+    },
+    {
+      "segment_index": 3,
+      "exercise": "push_up",
+      "start_s": 64.5,
+      "end_s": 93.5,
+      "reps": 12,
+      "rep_times": [
+        68.933,
+        72.8,
+        73.667,
+        74.6,
+        78.2,
+        79.067,
+        80.0,
+        81.0,
+        85.333,
+        86.067,
+        87.867,
+        88.667
+      ],
+      "thresholds": [
+        59.6,
+        96.5
+      ],
+      "signal": "elbow_L",
+      "range_deg": 123.2,
+      "fs": 15.0,
+      "valid_fraction": 0.948,
+      "flag": ""
+    },
+    {
+      "segment_index": 4,
+      "exercise": "squat",
+      "start_s": 93.5,
+      "end_s": 100.5,
+      "reps": 1,
+      "rep_times": [
+        95.8
+      ],
+      "thresholds": [
+        89.3,
+        128.9
+      ],
+      "signal": "knee_R",
+      "range_deg": 132.0,
+      "fs": 15.0,
+      "valid_fraction": 0.917,
+      "flag": ""
+    },
+    {
+      "segment_index": 5,
+      "exercise": "transition",
+      "start_s": 100.5,
+      "end_s": 103.5,
+      "reps": 0
+    },
+    {
+      "segment_index": 6,
+      "exercise": "push_up",
+      "start_s": 103.5,
+      "end_s": 119.0,
+      "reps": 3,
+      "rep_times": [
+        113.4,
+        115.933,
+        118.867
+      ],
+      "thresholds": [
+        136.3,
+        150.3
+      ],
+      "signal": "elbow_R",
+      "range_deg": 46.8,
+      "fs": 15.0,
+      "valid_fraction": 1.0,
+      "flag": ""
+    }
+  ],
+  "ground_truth_segment_counter_diagnostic": [
+    {
+      "exercise": "push_up",
+      "clip_id": "stu9_47.mp4",
+      "start_s": 19.0,
+      "end_s": 25.8,
+      "annotated": 2,
+      "counted": 2,
+      "error": 0,
+      "flag": "",
+      "signal": "elbow_R",
+      "valid_fraction": 1.0,
+      "rep_times": [
+        21.333,
+        25.6
+      ]
+    },
+    {
+      "exercise": "jump_jack",
+      "clip_id": "stu9_34.mp4",
+      "start_s": 32.666666666666664,
+      "end_s": 42.86666666666667,
+      "annotated": 8,
+      "counted": 7,
+      "error": -1,
+      "flag": "",
+      "signal": "arm_raise_L+arm_raise_R",
+      "valid_fraction": 0.935,
+      "rep_times": [
+        33.867,
+        35.267,
+        36.6,
+        37.867,
+        40.4,
+        41.6,
+        42.667
+      ]
+    },
+    {
+      "exercise": "push_up",
+      "clip_id": "stu6_39.mp4",
+      "start_s": 65.4,
+      "end_s": 92.33333333333333,
+      "annotated": 29,
+      "counted": 12,
+      "error": -17,
+      "flag": "",
+      "signal": "elbow_L",
+      "valid_fraction": 0.943,
+      "rep_times": [
+        68.933,
+        72.8,
+        73.667,
+        74.6,
+        78.2,
+        79.067,
+        80.0,
+        81.0,
+        85.333,
+        86.067,
+        87.867,
+        88.667
+      ]
+    },
+    {
+      "exercise": "squat",
+      "clip_id": "stu4_69.mp4",
+      "start_s": 93.53333333333333,
+      "end_s": 100.06666666666666,
+      "annotated": 2,
+      "counted": 1,
+      "error": -1,
+      "flag": "",
+      "signal": "knee_R",
+      "valid_fraction": 0.907,
+      "rep_times": [
+        95.8
+      ]
+    },
+    {
+      "exercise": "push_up",
+      "clip_id": "stu6_47.mp4",
+      "start_s": 111.76666666666667,
+      "end_s": 119.0,
+      "annotated": 3,
+      "counted": 3,
+      "error": 0,
+      "flag": "",
+      "signal": "elbow_R",
+      "valid_fraction": 1.0,
+      "rep_times": [
+        113.267,
+        115.867,
+        118.8
+      ]
+    }
+  ],
+  "limitations": [
+    "Pose extraction remains annotation-assisted upstream.",
+    "GT-segment counting is an oracle diagnostic only; it is not the end-to-end result.",
+    "A single video is illustrative and does not establish overall rep-count accuracy."
+  ],
+  "feature_sha256": "8d6dfac44e59c3f790f0fa16ce2baf7f841832fc1e97e68e61d90c000a1bc875",
+  "ground_truth_json_sha256": "5fcbe3ade6c1229d50785112f5f3a9589d681fc1a09ad404f04510e7a4c9104a",
+  "video_selection": "Lexicographically first indexed test video, selected before reviewing rep-count outcomes"
+}

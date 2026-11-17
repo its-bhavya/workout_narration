@@ -1,21 +1,16 @@
 """pipeline.py -- End-to-end integration of segmentation, rep counting, and narration formatting."""
 from __future__ import annotations
 
-import json
 import logging
 from pathlib import Path
 from typing import Any
 
-import joblib
-import numpy as np
 import pandas as pd
 
-from ..data_pipeline.v2_protocol import require_v2, active_path
+from workflow import load_bundle, bundle_smoothing, infer_frame, verify_bundle_training
+from ..segmentation.config import WINDOWS_CSV, FEATURES_DIR, SYNTH_DIR
 from ..rep_counting.rep_counter import count_for_exercise
-from ..segmentation.config import OUTPUT_DIR, STRIDE_S, WINDOW_S
-from ..segmentation.features import fill_video_nans, window_features
-from ..segmentation.make_windows import make_windows_for_video
-from ..segmentation.smooth import smooth, to_segments
+from ..segmentation.metrics import all_metrics, gt_from_json
 from .extractor import load_ground_truth_if_available, resolve_features_input
 from .models import (
     GroundTruthComparison,
@@ -26,12 +21,6 @@ from .models import (
 from .narration_formatter import generate_workout_timeline
 
 logger = logging.getLogger(__name__)
-
-# Default model & params paths
-DEFAULT_MODEL_PATH = OUTPUT_DIR / "rf_model.joblib"
-ALT_MODEL_PATH = OUTPUT_DIR / "model.joblib"
-DEFAULT_PARAMS_PATH = OUTPUT_DIR / "chosen_params.json"
-
 
 class WorkoutPipeline:
     """End-to-end multi-exercise workout analysis pipeline.
@@ -50,49 +39,29 @@ class WorkoutPipeline:
         tau: float | None = None,
         min_len: int | None = None,
         end_pad_s: float = 0.3,
+        windows_path: Path = WINDOWS_CSV,
+        features_dir: Path = FEATURES_DIR,
+        synth_dir: Path = SYNTH_DIR,
     ) -> None:
         self.end_pad_s = end_pad_s
 
-        # Resolve model path
-        if model_path is not None:
-            self.model_path = Path(model_path)
-        elif DEFAULT_MODEL_PATH.exists():
-            self.model_path = DEFAULT_MODEL_PATH
-        elif ALT_MODEL_PATH.exists():
-            self.model_path = ALT_MODEL_PATH
-        else:
-            raise FileNotFoundError(
-                f"No segmentation model found. Looked for {DEFAULT_MODEL_PATH} and {ALT_MODEL_PATH}."
-            )
-
-        # Load model bundle
-        active_path(self.model_path)
-        bundle = require_v2(joblib.load(self.model_path))
-        self.model = bundle["model"]
-        self.feature_cols: list[str] = bundle["feature_cols"]
-        self.fill_values: dict = bundle["fill_values"]
-        self.classes: list[str] = list(bundle["classes"])
-
-        # Resolve smoothing parameters (tau and min_len)
-        self.params_path = Path(params_path) if params_path else DEFAULT_PARAMS_PATH
-        if tau is not None and min_len is not None:
-            self.tau = float(tau)
-            self.min_len = int(min_len)
-        elif self.params_path.exists():
-            active_path(self.params_path)
-            with open(self.params_path, encoding="utf-8") as fh:
-                p = require_v2(json.load(fh))
-            self.tau = float(p.get("tau", 0.7))
-            self.min_len = int(p.get("min_len", 2))
-        else:
-            self.tau = 0.7
-            self.min_len = 2
+        self.features_dir=Path(features_dir)
+        self.synth_dir=Path(synth_dir)
+        self.bundle,self.model_path=load_bundle(model_path)
+        self.videos=verify_bundle_training(self.bundle,windows_path,self.features_dir)
+        self.model=self.bundle["model"]
+        self.feature_cols=self.bundle["feature_cols"]
+        self.classes=self.bundle["classes"]
+        self.tau,self.min_len=bundle_smoothing(self.bundle,self.model_path,params_path)
+        if tau is not None or min_len is not None:
+            if tau is None or min_len is None or (float(tau),int(min_len))!=(self.tau,self.min_len):
+                raise ValueError("Integration must use the frozen CV smoothing parameters")
 
     def analyze(
         self,
         video_input: str | Path | pd.DataFrame,
         video_id: str | None = None,
-        show_gt: bool = True,
+        show_gt: bool = False,
     ) -> WorkoutAnalysisResult:
         """Run the full integrated pipeline on a multi-exercise workout video.
 
@@ -107,42 +76,13 @@ class WorkoutPipeline:
         WorkoutAnalysisResult
             Full structured results, segment details, and narration cue timeline.
         """
-        # 1. Resolve and load features
-        df, resolved_vid = resolve_features_input(video_input)
-        vid = video_id or resolved_vid
-
-        if "time_s" not in df.columns:
-            raise ValueError(f"Features table must contain a 'time_s' column. Found: {list(df.columns)}")
-
-        video_end_s = float(df["time_s"].max())
-
-        # 2. Windowing and Segmentation
-        df_filled = fill_video_nans(df)
-        windows = make_windows_for_video(df_filled, vid, split="test")
-
-        if not windows:
-            raise ValueError(
-                f"Video duration ({video_end_s:.1f}s) is too short to produce sliding windows of {WINDOW_S}s."
-            )
-
-        feat_rows = []
-        for w in windows:
-            rows_slice = df_filled.iloc[w["row_start"]:w["row_end"]]
-            feat_rows.append(window_features(rows_slice))
-
-        X = pd.DataFrame(feat_rows).reindex(columns=self.feature_cols)
-        X = X.fillna(pd.Series(self.fill_values))
-
-        # Model inference
-        proba = self.model.predict_proba(X.to_numpy())
-        pred_labels = self.model.classes_[proba.argmax(axis=1)]
-        max_probs = proba.max(axis=1)
-        t_centers = [w["t_center"] for w in windows]
-
-        # Post-processing smoothing
-        raw_labels = list(pred_labels)
-        smo_labels = smooth(raw_labels, list(max_probs), tau=self.tau, min_len=self.min_len)
-        raw_segs = to_segments(smo_labels, t_centers, video_end_s)
+        # One canonical prediction path shared with the final evaluator.
+        df,resolved_vid=resolve_features_input(video_input,self.features_dir,self.synth_dir)
+        vid=video_id or resolved_vid
+        if vid!=resolved_vid or vid not in self.videos:
+            raise ValueError("Integration requires one indexed v2 video ID")
+        meta=self.videos[vid]
+        _,_,predicted_segments,video_end_s=infer_frame(self.bundle,df,meta)
 
         # 3. Per-Segment Rep Counting
         segment_results: list[SegmentResult] = []
@@ -152,7 +92,7 @@ class WorkoutPipeline:
         total_exercise_duration = 0.0
         total_transition_duration = 0.0
 
-        for idx, seg in enumerate(raw_segs):
+        for idx, seg in enumerate(predicted_segments):
             exercise = seg["exercise"]
             start_s = float(seg["start_time"])
             end_s = float(seg["end_time"])
@@ -238,25 +178,18 @@ class WorkoutPipeline:
         # 6. Optional Ground Truth Evaluation
         gt_comparison: GroundTruthComparison | None = None
         if show_gt:
-            gt_segs, gt_dur, gt_reps = load_ground_truth_if_available(vid)
+            gt_segs, gt_dur, gt_reps = load_ground_truth_if_available(vid,self.synth_dir)
             if gt_segs is not None:
-                # Calculate frame accuracy if seg_label column exists in df
-                frame_acc = None
-                if "seg_label" in df.columns:
-                    gt_col = df["seg_label"].astype(str).to_numpy()
-                    pred_at_row = []
-                    tc = np.array(t_centers)
-                    for _, row in df.iterrows():
-                        t = float(row["time_s"])
-                        closest_idx = int(np.argmin(np.abs(tc - t)))
-                        pred_at_row.append(smo_labels[closest_idx])
-                    frame_acc = float(np.mean(np.array(pred_at_row) == gt_col))
+                truth,end=gt_from_json(meta)
+                segmentation_metrics=all_metrics(truth,predicted_segments,end,self.classes)
+                frame_acc=segmentation_metrics["frame_accuracy"]
 
                 gt_comparison = GroundTruthComparison(
                     gt_segments=gt_segs,
                     frame_accuracy=frame_acc,
                     annotated_reps=gt_reps or {},
                     predicted_reps=exercise_counts,
+                    segmentation_metrics=segmentation_metrics,
                 )
 
         return WorkoutAnalysisResult(
@@ -266,13 +199,16 @@ class WorkoutPipeline:
             segments=segment_results,
             timeline_cues=timeline_cues,
             ground_truth=gt_comparison,
+            run_id="v2",
+            experiment_id=self.bundle["experiment_id"],
+            comparison_scope=("final_test" if meta["split"]=="test" else "in_sample_train_demo") if show_gt else None,
         )
 
 
 def analyze_workout(
     video_input: str | Path | pd.DataFrame,
     video_id: str | None = None,
-    show_gt: bool = True,
+    show_gt: bool = False,
     **kwargs: Any,
 ) -> WorkoutAnalysisResult:
     """Convenience helper to run the workout pipeline in a single call."""

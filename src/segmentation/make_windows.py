@@ -1,9 +1,9 @@
 """make_windows.py -- sliding-window label builder for segmentation.
 
-For every ``data/features/<video_id>_angles.csv`` this slides fixed-length
+For every ``data/features/v2/<video_id>_angles.csv`` this slides fixed-length
 windows over ``time_s`` and assigns each window the majority ``seg_label``
 among its rows. It writes one row per window to
-``outputs/segmentation/windows.csv``.
+``outputs/segmentation_v2/windows.csv``.
 
 This script does NOT compute feature vectors or train a classifier -- it only
 produces window metadata (label, purity, row slice). The classifier step
@@ -169,11 +169,11 @@ def main() -> None:
         description="Build sliding-window labels for the segmentation classifier."
     )
     parser.add_argument("--features-dir", type=Path, default=FEATURES_DIR,
-                        help="Directory of *_angles.csv files (default: data/features)")
+                        help="Directory of *_angles.csv files (default: data/features/v2)")
     parser.add_argument("--synth-dir", type=Path, default=SYNTH_DIR,
                         help="Root of synthetic video/JSON tree (default: data/synthetic)")
     parser.add_argument("--out", type=Path, default=WINDOWS_CSV,
-                        help="Output windows CSV (default: outputs/segmentation/windows.csv)")
+                        help="Output windows CSV (default: outputs/segmentation_v2/windows.csv)")
     args = parser.parse_args()
 
     videos = catalog(args.synth_dir)

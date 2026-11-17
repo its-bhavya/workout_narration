@@ -85,6 +85,7 @@ class GroundTruthComparison:
     frame_accuracy: float | None = None
     annotated_reps: dict[str, int] = field(default_factory=dict)
     predicted_reps: dict[str, int] = field(default_factory=dict)
+    segmentation_metrics: dict[str, float] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -92,6 +93,7 @@ class GroundTruthComparison:
             "frame_accuracy": round(self.frame_accuracy, 3) if self.frame_accuracy is not None else None,
             "annotated_reps": self.annotated_reps,
             "predicted_reps": self.predicted_reps,
+            "segmentation_metrics": self.segmentation_metrics,
         }
 
 
@@ -135,11 +137,17 @@ class WorkoutAnalysisResult:
     segments: list[SegmentResult]
     timeline_cues: list[NarrationCue] = field(default_factory=list)
     ground_truth: GroundTruthComparison | None = None
+    run_id: str = "v2"
+    experiment_id: str | None = None
+    comparison_scope: str | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
             "video_id": self.video_id,
             "duration_s": round(self.duration_s, 2),
+            "run_id": self.run_id,
+            "experiment_id": self.experiment_id,
+            "comparison_scope": self.comparison_scope,
             "summary": self.summary.to_dict(),
             "segments": [s.to_dict() for s in self.segments],
             "narration_timeline": [c.to_dict() for c in self.timeline_cues],

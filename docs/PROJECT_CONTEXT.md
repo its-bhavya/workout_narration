@@ -76,8 +76,8 @@ Test and held-out CV validation windows are not purity-filtered.
 `src/segmentation/cv.py:get_cv_split(windows, k)` returns train videos from
 folds !=k (training purity filter applied) and validation videos from fold k.
 Both are drawn only from the train pool. Full source-clip sets must be disjoint
-before purity filtering. Separate-val train/evaluate/sweep/run-all entry points
-are disabled; no model is trained, evaluated or selected in this phase.
+before purity filtering. Separate-val entry points were disabled during Phase 4; their source-clip CV
+replacements are described below. No model was fitted/evaluated in Phase 4.
 
 All active dataset readers fail on missing/non-v2 run_id or archived paths.
 The final audit verifies complete feature/window coverage, source split/fold
@@ -103,3 +103,54 @@ Phase 4 extraction and final data audit completed successfully; details follow.
 ## Phase 4 completed run
 
 V2 per-video features: 141 videos, stride 2, workers 1, IMAGE mode, resume only. Windows: 17607. No model training/evaluation. Summary, long-gap list, boundary ratios, window counts and CV partition counts are saved in outputs/segmentation_v2/. Consistency checks passed; archive unchanged.
+
+## CV training/evaluation/integration compatibility ? 17 November 2026
+
+Authoritative details and commands: [V2_TRAINING.md](V2_TRAINING.md).
+
+The retired separate-val scripts have been replaced by train-only five-fold
+source-clip CV. Candidate ranking and smoothing choice use mean fold per-video
+Edit, then frame accuracy, with deterministic tie breaks. They never use test
+scores. Each fold fits fresh median imputation and, for LR/SVM/KNN/MLP, scaling;
+training purity defaults to 0.8 while validation remains unfiltered. MLP/HistGBT
+random window-level early stopping is disabled. A separate explicit all-train
+refit freezes the selected pipeline and smoothing; final test is explicit and
+never reselects parameters. Selection-CV scores are not unbiased nested-CV scores.
+
+Dataset run_id=v2 is separate from model experiment_id. Versioned experiments,
+input/feature/OOF hashes, all-train bundle guards, and matching model/parameter
+hashes protect the handoff. Active-model pointers retain prior versions.
+Prediction, evaluation and narration now share one inference implementation and
+use n_frames/fps as the exact video end. GT comparison is opt-in, with train
+comparisons labeled in-sample. Rep-counter thresholds were not changed.
+
+The real train schema audit found ankle_dist_norm_3d absent in 2/120 CSVs and
+all-NaN in the other 118; the extractor has no corresponding computed 3D
+measurement. Approved resolution: fixed permitted 112-feature schema, missing
+columns aligned to NaN in memory, fold-trained imputation/zero fallback, no
+feature rewrites or re-extraction. The frozen archive and data assignments are
+unchanged. Validation uses synthetic fit/refit/integration fixtures and a real
+read-only train feature/CV preflight; no benchmark model sweep or test evaluation
+is part of this change.
+
+The existing extractor still uses annotated exercise/segment labels for person
+selection. Classifier input allow-lists and label-independent inference do not
+remove that upstream assistance. Paper claims remain scoped to an offline,
+annotation-assisted synthetic benchmark; unassisted continuous-workout testing
+is future work. Historical v1 metrics are not results for v2.
+
+Compatibility preflight passed on the real train pool: 14,879 windows x 112
+features, 120 videos, all five source-fold partitions valid. Test angle files
+were not read; no real model or activation was written. Classifier settings and
+software versions are recorded with future selections/refits. The frozen archive
+fingerprint still matches the completed Phase 4 audit.
+
+Validation for this compatibility change: 175 tests passed, including synthetic
+fit/refit/final-evaluation/integration fixtures. Real benchmark training and test
+evaluation were not run.
+
+<!-- v2-model-results:start -->
+## Completed v2 model experiment — 17 November 2026
+
+8-model train-only CV selected **rf** (Edit 71.54 ± 2.90 fold SD; tau=0.5, min_len=3). After all-train refit, only that frozen winner was evaluated on 21 test videos: Edit 72.51, frame accuracy 86.66%, segment F1@25 0.750. Test was not used for model selection or tuning. See [full results, caveats and reproducibility tables](results/V2_MODEL_RESULTS.md).
+<!-- v2-model-results:end -->

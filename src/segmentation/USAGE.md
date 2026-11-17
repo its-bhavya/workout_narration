@@ -1,39 +1,24 @@
-# Workout narration: active v2 protocol
+# V2 model commands
 
-Active protocol and provenance: [PROJECT_CONTEXT](../../docs/PROJECT_CONTEXT.md).
+Current training/evaluation and integration guide: [V2_TRAINING.md](../../docs/V2_TRAINING.md).
 
-RepCount only, pass/review, fps >=20: train is original train (239 clips);
-test is original val+test (94 clips). Countix is excluded. Contributor prefixes
-are not subjects. There is no separate validation split.
+Model selection now uses five train source-clip folds. Per-fold imputation
+and scaling are fitted only on eligible training windows. Held-out fold windows
+are unfiltered; test angle files are not read by CV or all-train refitting.
 
-Five train source-clip folds use stratified seed 3969, selected on total margin
-balance only. Construction uses seed 42: 24 videos/fold, K=3..5, train cap 5,
-test cap 1, 21 test videos. Exercise slots stay within +/-10%; clips never
-repeat within a video. Train reuse spread is <=1 per exercise/fold.
+The active entry points are train.py (CV/check-only/refit), hparam_sweep.py
+(train-only ranking), evaluate.py (OOF report or explicit final test), and
+predict_video.py (the frozen all-train bundle). run_all.py delegates to train.py;
+it never silently evaluates test. See the guide for exact commands and artifacts.
 
-Phase 4 uses per-video features in data/features/v2/ and existing window code
-in outputs/segmentation_v2/. Run-ID guards reject missing/non-v2 provenance and
-archived data. V1 data is frozen in data/_archive_v1/. Native clip caches are
-deferred; no separate-val training/evaluation command is active.
+Data preparation remains `uv run --no-sync python -B src/data_pipeline/phase4.py`.
+Per-video features are data/features/v2/; windows and model experiments are
+under outputs/segmentation_v2/. Models, windows, features and frozen archive data
+are not overwritten by these commands. No benchmark model was fitted or tested
+as part of the compatibility refactor.
 
-From the repository root, resume the entire preparation workflow:
+<!-- v2-model-results:start -->
+## Completed v2 model experiment — 17 November 2026
 
-```powershell
-uv run --no-sync python -B src/data_pipeline/phase4.py
-```
-
-This extracts train and test at stride 2 with one worker, without --force;
-then rebuilds summary/long-gap diagnostics, reports boundary ratios, builds
-windows and reports counts before/after training purity 0.8. Test counts stay
-unfiltered. `src/segmentation/cv.py:get_cv_split` supplies training folds !=k
-and validation fold k, asserting zero source-clip overlap. No models are trained
-or evaluated. Test is extraction and counting only.
-
-To rerun only reports/windows after extraction is complete:
-
-```powershell
-uv run --no-sync python -B src/data_pipeline/phase4.py --postprocess-only
-```
-
-Historical documentation is retained under docs/history/ and is not an active
-workflow. See docs/V2_GENERATION.md for rendering/resume details.
+8-model train-only CV selected **rf** (Edit 71.54 ± 2.90 fold SD; tau=0.5, min_len=3). After all-train refit, only that frozen winner was evaluated on 21 test videos: Edit 72.51, frame accuracy 86.66%, segment F1@25 0.750. Test was not used for model selection or tuning. See [full results, caveats and reproducibility tables](../../docs/results/V2_MODEL_RESULTS.md).
+<!-- v2-model-results:end -->

@@ -129,16 +129,18 @@ def test_existing_window_builder_carries_fold_and_run_id(dataset,tmp_path,monkey
     assert windows.loc[windows.split=='test','fold'].isna().all()
 
 
-def test_contributor_and_model_workflows_are_retired():
+def test_contributor_retired_and_cv_entrypoints_available():
     import build_splits
     import train
     import evaluate
     with pytest.raises(RuntimeError,match='deprecated'):
         build_splits.group_key(pd.Series({'clip_id':'stu1_example.mp4'}))
-    with pytest.raises(RuntimeError,match='retired'):
-        train.main()
-    with pytest.raises(RuntimeError,match='retired'):
-        evaluate.main()
+    with pytest.raises(SystemExit) as train_exit:
+        train.main(["--help"])
+    assert train_exit.value.code==0
+    with pytest.raises(SystemExit) as eval_exit:
+        evaluate.main(["--help"])
+    assert eval_exit.value.code==0
 
 
 def test_stride2_boundary_interval_mapping():

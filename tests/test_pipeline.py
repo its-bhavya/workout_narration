@@ -93,48 +93,32 @@ def test_resolve_features_input(tmp_path: Path):
     assert vid == "in_memory_video" and len(out)==3
 
 
-@pytest.mark.skip(reason="Phase 4 permits no model inference/evaluation; no v2 model exists")
-def test_pipeline_on_synth_v2_train_f0_0001():
-    pipeline = WorkoutPipeline()
-    result = pipeline.analyze("synth_v2_train_f0_0001", show_gt=True)
-
-    assert isinstance(result, WorkoutAnalysisResult)
-    assert result.video_id == "synth_v2_train_f0_0001"
-    assert result.duration_s > 100.0
-    assert result.summary.total_reps > 50
-    assert len(result.segments) >= 5
-
-    # Check that segments have timestamps and rep counts
-    for s in result.segments:
-        assert s.end_time > s.start_time
-        if s.is_exercise:
-            assert s.exercise in ("squat", "push_up", "jump_jack")
-            assert len(s.rep_times) == s.rep_count
-        else:
-            assert s.exercise == "transition"
-            assert s.rep_count == 0
-
-    # Check narration cues
-    cues = result.to_narration_script()
-    assert len(cues) > 20
-    assert cues[0]["cue_type"] == "workout_start"
-    assert cues[-1]["cue_type"] == "workout_end"
-
-    # Verify JSON export
-    j_str = result.to_json()
-    parsed = json.loads(j_str)
-    assert parsed["video_id"] == "synth_v2_train_f0_0001"
-    assert "summary" in parsed
-    assert "segments" in parsed
-    assert "narration_timeline" in parsed
+def test_pipeline_with_frozen_fixture(synthetic_bundle):
+    artifact=synthetic_bundle
+    pipeline=WorkoutPipeline(model_path=artifact["model"],windows_path=artifact["windows"],
+                             features_dir=artifact["features"],synth_dir=artifact["synth"])
+    vid=next(vid for vid,meta in artifact["videos"].items() if meta["split"]=="train")
+    result=pipeline.analyze(vid)
+    assert result.run_id=="v2" and result.experiment_id=="fixture"
+    assert result.duration_s==24.
+    assert result.segments[0].start_time==0.
+    assert result.segments[-1].end_time==24.
+    assert result.ground_truth is None
+    assert result.to_narration_script()[0]["cue_type"]=="workout_start"
+    with pytest.raises(ValueError,match="frozen CV"):
+        WorkoutPipeline(model_path=artifact["model"],windows_path=artifact["windows"],
+                        features_dir=artifact["features"],tau=.99,min_len=1)
 
 
-@pytest.mark.skip(reason="Phase 4 permits no model inference/evaluation; no v2 model exists")
-def test_pipeline_save_json(tmp_path: Path):
-    out_file = tmp_path / "test_out.json"
-    result = analyze_workout("synth_v2_train_f0_0001", show_gt=False)
-    result.save_json(out_file)
-    assert out_file.exists()
-    content = json.loads(out_file.read_text(encoding="utf-8"))
-    assert content["video_id"] == "synth_v2_train_f0_0001"
-    assert content["summary"]["total_reps"] > 0
+def test_pipeline_save_json(tmp_path: Path,synthetic_bundle):
+    artifact=synthetic_bundle
+    vid=next(vid for vid,meta in artifact["videos"].items() if meta["split"]=="test")
+    result=analyze_workout(vid,show_gt=True,model_path=artifact["model"],
+                           windows_path=artifact["windows"],features_dir=artifact["features"],
+                           synth_dir=artifact["synth"])
+    target=tmp_path/"result.json";result.save_json(target)
+    content=json.loads(target.read_text())
+    assert content["run_id"]=="v2" and content["experiment_id"]=="fixture"
+    assert content["comparison_scope"]=="final_test"
+    assert content["duration_s"]==24.
+    assert content["ground_truth"]["segmentation_metrics"]

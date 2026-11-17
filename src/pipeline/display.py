@@ -26,6 +26,7 @@ def print_workout_report(
     # Header
     print("\n" + "=" * 78)
     print(f" WORKOUT ANALYSIS & NARRATION PIPELINE REPORT: {res.video_id}")
+    print(f" Dataset: {res.run_id} | Model experiment: {res.experiment_id or 'unspecified'}")
     print("=" * 78)
 
     # High-level summary
@@ -40,6 +41,7 @@ def print_workout_report(
         gt = res.ground_truth
         print("-" * 78)
         print(" GROUND-TRUTH BENCHMARK COMPARISON:")
+        print(f" Comparison scope: {res.comparison_scope or 'unspecified'}")
         if gt.frame_accuracy is not None:
             print(f" Frame-level Segmentation Accuracy: {gt.frame_accuracy * 100:.1f}%")
         print(" Rep Count Accuracy (Predicted vs Annotated):")

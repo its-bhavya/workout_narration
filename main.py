@@ -35,6 +35,7 @@ def main() -> None:
         action="store_true",
         help="Output raw JSON to stdout (useful for piping directly into a narration engine).",
     )
+    parser.add_argument("--show-gt",action="store_true",help="Explicit ground-truth comparison; training demos are in-sample")
     parser.add_argument(
         "--no-gt",
         action="store_true",
@@ -60,13 +61,13 @@ def main() -> None:
         "--tau",
         type=float,
         default=None,
-        help="Confidence smoothing threshold (overrides chosen_params.json).",
+        help="Frozen CV confidence threshold; if supplied, must match the selected bundle.",
     )
     parser.add_argument(
         "--min-len",
         type=int,
         default=None,
-        help="Minimum run length in windows (overrides chosen_params.json).",
+        help="Frozen CV minimum run length; if supplied, must match the selected bundle.",
     )
 
     args = parser.parse_args()
@@ -79,7 +80,7 @@ def main() -> None:
 
     result = pipeline.analyze(
         video_input=args.video,
-        show_gt=not args.no_gt,
+        show_gt=args.show_gt and not args.no_gt,
     )
 
     if args.export:
@@ -93,7 +94,7 @@ def main() -> None:
         print_workout_report(
             result,
             show_narration=not args.no_narration,
-            show_gt=not args.no_gt,
+            show_gt=args.show_gt and not args.no_gt,
             max_cues=max_cues,
         )
 

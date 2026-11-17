@@ -287,7 +287,7 @@ def resolve_features_input(
         df = video_input.copy()
         if "run_id" not in df or not df.run_id.eq("v2").all():
             raise ValueError("Input features require run_id=v2")
-        video_id = "in_memory_video"
+        video_id = str(df.video_id.iloc[0]) if "video_id" in df and df.video_id.nunique()==1 else "in_memory_video"
         return df, video_id
 
     input_str = str(video_input).strip()
@@ -361,7 +361,7 @@ def load_ground_truth_if_available(
             with open(j_path, encoding="utf-8") as fh:
                 meta = load_json(j_path)
             fps = float(meta.get("fps", 30))
-            duration_s = float(meta.get("duration_s", 0.0))
+            duration_s = float(meta["n_frames"] / fps)
             raw_segments = meta.get("segments", [])
             gt_segments = []
             annotated_reps: dict[str, int] = {}
