@@ -62,3 +62,16 @@ counter defaults. Records end-to-end video/exercise counts, video totals, and a
 separate ground-truth-window counter diagnostic, with model/input hashes and
 settings. No calibration is performed; do not tune from test results. Existing
 output directories are preserved. See [recorded results](../../docs/results/V2_REP_COUNT_RESULTS.md).
+
+## Push-up local adaptation
+
+Push-ups now use local adaptive thresholds selected on training folds. See the
+[change and follow-up results](../../docs/results/PUSHUP_COUNTER_UPDATE.md).
+Reproduce training-only selection with:
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.calibrate_pushups --out-dir outputs/rep_pushup_dev/new_selection
+```
+
+This reports settings; it never rewrites defaults automatically. The original
+final-test baseline is preserved separately from the follow-up evaluation.

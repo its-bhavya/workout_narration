@@ -56,6 +56,9 @@ class SegmentResult:
     flag: str = ""
     valid_fraction: float | None = None
     cues: list[NarrationCue] = field(default_factory=list)
+    threshold_mode: str = ""
+    adaptive_window_s: float | None = None
+    threshold_fractions: tuple[float, float] | None = None
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -74,6 +77,9 @@ class SegmentResult:
             "flag": self.flag,
             "valid_fraction": self.valid_fraction,
             "cues": [c.to_dict() for c in self.cues],
+            "threshold_mode": self.threshold_mode,
+            "adaptive_window_s": self.adaptive_window_s,
+            "threshold_fractions": self.threshold_fractions,
         }
 
 

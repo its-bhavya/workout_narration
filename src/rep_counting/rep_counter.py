@@ -70,11 +70,14 @@ EXERCISES = {
         "pattern": "down_up",
         "thresholds": (135.0, 148.0),
         "mode": "adaptive",
-        "fracs": (0.25, 0.55),        
+        "fracs": (0.45, 0.75),
+        # Local normalization follows changes in camera angle / rep amplitude.
+        # Selected on source-disjoint training folds; see PUSHUP_COUNTER_UPDATE.md.
+        "adaptive_window_s": 6.0,
         "smooth_s": 0.1,
         "min_gap_s": 0.2,
         "min_range_deg": 20.0,
-        "confirm_s": 0.10,
+        "confirm_s": 0.0,
     },
     "jump_jack": {
         "columns": ("arm_raise_L", "arm_raise_R"),
@@ -239,6 +242,26 @@ def adaptive_thresholds(
     hi = np.nanpercentile(sig, 90)
 
     return lo + fracs[0] * (hi - lo), lo + fracs[1] * (hi - lo)
+
+
+def local_motion_signal(sig: np.ndarray, fs: float, window_s: float,
+                        min_range_deg: float) -> np.ndarray:
+    """Normalize against local p10/p90 without bridging lost-tracking gaps.
+
+    Centered windows use offline lookahead, like the existing smoothing.
+    Low-motion windows become missing so state cannot persist through a pause.
+    """
+    result = np.full(len(sig), np.nan)
+    edges = np.flatnonzero(np.diff(np.r_[False, np.isfinite(sig), False]))
+    for start, end in zip(edges[::2], edges[1::2]):
+        values = pd.Series(sig[start:end])
+        window = values.rolling(max(3, round(window_s * fs)), center=True, min_periods=1)
+        low = window.quantile(.1).to_numpy()
+        high = window.quantile(.9).to_numpy()
+        span = high - low
+        result[start:end] = np.where(span >= min_range_deg,
+                                    (sig[start:end] - low) / np.maximum(span, 1e-9), np.nan)
+    return result
 
 
 # def run_state_machine(
@@ -457,18 +480,29 @@ def count_for_exercise(
 
     use_mode = mode or cfg["mode"]
 
-    if thresholds is not None:
+    local_window = cfg.get("adaptive_window_s")
+    counting_signal = sig
+    if thresholds is None and use_mode == "adaptive" and local_window:
+        counting_signal = local_motion_signal(sig, fs, local_window, cfg["min_range_deg"])
+        t_low, t_high = fracs or cfg["fracs"]
+        # No single pair of angle thresholds describes a locally normalized signal.
+        result["thresholds"] = None
+        result["threshold_mode"] = "local_adaptive"
+        result["adaptive_window_s"] = local_window
+        result["threshold_fractions"] = (t_low, t_high)
+    elif thresholds is not None:
         t_low, t_high = thresholds
     elif use_mode == "adaptive":
         t_low, t_high = adaptive_thresholds(sig, fracs or cfg["fracs"])
     else:
         t_low, t_high = cfg["thresholds"]
 
-    result["thresholds"] = (round(float(t_low), 1), round(float(t_high), 1))
+    if result.get("threshold_mode") != "local_adaptive":
+        result["thresholds"] = (round(float(t_low), 1), round(float(t_high), 1))
 
     #idx = run_state_machine(sig, t_low, t_high, cfg["pattern"])
     idx = run_state_machine(
-    sig, t_low, t_high, cfg["pattern"], fs=fs, confirm_s=cfg["confirm_s"],
+    counting_signal, t_low, t_high, cfg["pattern"], fs=fs, confirm_s=cfg["confirm_s"],
     )
     times = drop_close([float(t[i]) for i in idx], cfg["min_gap_s"])
 

@@ -1,0 +1,607 @@
+{
+  "run_id": "v2",
+  "split": "train",
+  "n_pushup_segments": 155,
+  "n_source_clips": 81,
+  "selection_metric": "MAE averaged within source clip, then within fold, then across folds",
+  "baseline": {
+    "window_s": 0.0,
+    "low_fraction": 0.25,
+    "high_fraction": 0.55,
+    "confirm_s": 0.1,
+    "macro_fold_mae": 4.069852941176471,
+    "fold_0_mae": 5.15625,
+    "fold_1_mae": 5.911764705882353,
+    "fold_2_mae": 2.28125,
+    "fold_3_mae": 3.03125,
+    "fold_4_mae": 3.96875
+  },
+  "selected": {
+    "window_s": 6.0,
+    "low_fraction": 0.45,
+    "high_fraction": 0.75,
+    "confirm_s": 0.0,
+    "macro_fold_mae": 3.0205882352941176,
+    "fold_0_mae": 2.34375,
+    "fold_1_mae": 3.8529411764705883,
+    "fold_2_mae": 2.90625,
+    "fold_3_mae": 2.90625,
+    "fold_4_mae": 3.09375
+  },
+  "heldout_fold_checks": [
+    {
+      "fold": 0,
+      "selected": {
+        "window_s": 6.0,
+        "low_fraction": 0.45,
+        "high_fraction": 0.75,
+        "confirm_s": 0.0,
+        "macro_fold_mae": 3.0205882352941176,
+        "fold_0_mae": 2.34375,
+        "fold_1_mae": 3.8529411764705883,
+        "fold_2_mae": 2.90625,
+        "fold_3_mae": 2.90625,
+        "fold_4_mae": 3.09375
+      },
+      "baseline_mae": 5.15625,
+      "selected_mae": 2.34375
+    },
+    {
+      "fold": 1,
+      "selected": {
+        "window_s": 6.0,
+        "low_fraction": 0.45,
+        "high_fraction": 0.75,
+        "confirm_s": 0.0,
+        "macro_fold_mae": 3.0205882352941176,
+        "fold_0_mae": 2.34375,
+        "fold_1_mae": 3.8529411764705883,
+        "fold_2_mae": 2.90625,
+        "fold_3_mae": 2.90625,
+        "fold_4_mae": 3.09375
+      },
+      "baseline_mae": 5.911764705882353,
+      "selected_mae": 3.8529411764705883
+    },
+    {
+      "fold": 2,
+      "selected": {
+        "window_s": 6.0,
+        "low_fraction": 0.45,
+        "high_fraction": 0.75,
+        "confirm_s": 0.0,
+        "macro_fold_mae": 3.0205882352941176,
+        "fold_0_mae": 2.34375,
+        "fold_1_mae": 3.8529411764705883,
+        "fold_2_mae": 2.90625,
+        "fold_3_mae": 2.90625,
+        "fold_4_mae": 3.09375
+      },
+      "baseline_mae": 2.28125,
+      "selected_mae": 2.90625
+    },
+    {
+      "fold": 3,
+      "selected": {
+        "window_s": 6.0,
+        "low_fraction": 0.45,
+        "high_fraction": 0.75,
+        "confirm_s": 0.0,
+        "macro_fold_mae": 3.0205882352941176,
+        "fold_0_mae": 2.34375,
+        "fold_1_mae": 3.8529411764705883,
+        "fold_2_mae": 2.90625,
+        "fold_3_mae": 2.90625,
+        "fold_4_mae": 3.09375
+      },
+      "baseline_mae": 3.03125,
+      "selected_mae": 2.90625
+    },
+    {
+      "fold": 4,
+      "selected": {
+        "window_s": 6.0,
+        "low_fraction": 0.45,
+        "high_fraction": 0.75,
+        "confirm_s": 0.0,
+        "macro_fold_mae": 3.0205882352941176,
+        "fold_0_mae": 2.34375,
+        "fold_1_mae": 3.8529411764705883,
+        "fold_2_mae": 2.90625,
+        "fold_3_mae": 2.90625,
+        "fold_4_mae": 3.09375
+      },
+      "baseline_mae": 3.96875,
+      "selected_mae": 3.09375
+    }
+  ],
+  "heldout_baseline_mae": 4.069852941176471,
+  "heldout_selected_mae": 3.0205882352941176,
+  "counter_source_sha256": "61b7c583d2d311221e45b35ca3dc0ad8bd674fc27a618857c19e4d7cc32f5825",
+  "inputs": [
+    {
+      "video_id": "synth_v2_train_f0_0001",
+      "features_sha256": "b287afa9015db539419fe0af94edf70bee2d833fcd691502e5b9c1a9e48a9e3c"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0002",
+      "features_sha256": "a18c3b8a474a8c1e35e1cb81c31c960978da9c603b91c57701d259c36cfc7cf4"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0003",
+      "features_sha256": "a8758630e5bd335a92d65b0cc5daca755c337f9a1ddc0943ad09adcf4fa72b30"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0004",
+      "features_sha256": "e697a700c37484fdb136b926aaea2fe625da14e6d2b1fdeb8deaa6c4f584bb0d"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0005",
+      "features_sha256": "363780b63b87c52ce8fe5337dd5c712f424dc23ff62abf13495a043a36721e25"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0006",
+      "features_sha256": "c89fc4ea5eb8142f18eb2d1496b12d50cff87945e9b38011eb11fe33afc25315"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0007",
+      "features_sha256": "bbd4a8c99a0f0403b326c3f547e144c9b8c574517ef3767e8b38fd9dba0b78d2"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0008",
+      "features_sha256": "7fe01fdcb305f4c88274e39067cc430faea74691b5cd3ac8532e8c6e262ff90a"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0009",
+      "features_sha256": "fc2f38e0410d3e74d5bef3864e302e0b5ff34f0abd35c1da142d003612cb3272"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0010",
+      "features_sha256": "3b5474abb5ee9e6d2b3db6e2c19f1b7ea77d537c791e1626c9b11b0849bc49ac"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0011",
+      "features_sha256": "95d90834c811c4bbc3e991ab819cd155fae1131bf63bfc86fa78ccaf8a33b28a"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0012",
+      "features_sha256": "e1a7868ade8e127199719731623e184bdb1e4cb04f5712f26d40410a7ab37812"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0013",
+      "features_sha256": "3a54c0c355af48f353524b1ec038f267fdcd0d2f6a21aa53d67b21a6f5a493b2"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0014",
+      "features_sha256": "2aebe662ab7406a4c458a691769f2d3ebdebc34e1bc09746e441a76c32ffda7d"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0015",
+      "features_sha256": "f7efc7740ee2a5f9312c068bbd7c6793dab962f7d35811ae82c0c82df960c818"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0016",
+      "features_sha256": "af92ad570ba80b47147fee735d6387a80a1e1db1368a48646a1f065f89f1ac82"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0017",
+      "features_sha256": "c164337f4aeb637345d80ed9e171a2aba973fbfaf8b5b7afe4ee59732de23f4b"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0018",
+      "features_sha256": "436d68785055a6e9938e4021562796fb81f3bf2e9f26a2851092bcd04a37e7c2"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0019",
+      "features_sha256": "f120e06f45800c09dc5fb4b6d7a1915393867c2418a5e710ccd56ca8b932fb40"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0020",
+      "features_sha256": "30a618bfcf9c6d3f5a5ab27a0ec978cccff847c9c0a91d628076963dba3a8a01"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0021",
+      "features_sha256": "73418eceda9f6f1da4ea1652a8f1e0a287c480e05ba072e5436efe5e1da2be5c"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0022",
+      "features_sha256": "274e4706787dc1b64b56e6ea308170c5b25b5373c4d2053503d3ed05347ead2e"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0023",
+      "features_sha256": "91aa305e59fe6ceed8526f2fecd2c268fac5a2e7edaa8f0d86ce359d1bf5529d"
+    },
+    {
+      "video_id": "synth_v2_train_f0_0024",
+      "features_sha256": "fd91dfad3e262d01152f5ea6050cd8a6d5935c6cdc610861816de54253c1b03d"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0001",
+      "features_sha256": "56cdbaba8899c58502158c1a87799e1d191288bb44a02883edeedba7c84af00a"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0002",
+      "features_sha256": "38399db9380c198d1e1a5ba72076c086f5eb3005c2d2215e6b644a8da6362172"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0003",
+      "features_sha256": "296e4a822c002c59db021c9909ca361e042feb7c570fe5667af8596eb86023c4"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0004",
+      "features_sha256": "13667e424faf659bcf6b7cb151bacd424cbb1673b1bc34121eaf4cb6ce470e99"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0005",
+      "features_sha256": "666c7be072c09ea3f1124f768dec14ebb16aaa9431fd3bd5dfb9bcd7c846089a"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0006",
+      "features_sha256": "fe8dfa648c2479fbaca3cfa6f890082f5590d95518ae2a730c762cabe48dbd5b"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0007",
+      "features_sha256": "e7a54fa2bf6a8c43698aea8bd3a9f79798ce27a2391a7e560f40163b3eded34f"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0008",
+      "features_sha256": "c0cfb445293c67263f873c17f1915b3e89f2737451a7c843744f52ad4e7e0081"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0009",
+      "features_sha256": "9d7957bd4b0ea872c41e57ebfcd9e87f11bd1f7fd589abe0c8d9b7988b60bbd2"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0010",
+      "features_sha256": "e970975f187b143fafffaadcd68f26b785d8677f1a74ea29d5fa2bf18a44bf4e"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0011",
+      "features_sha256": "dde2163fbe1b6bf08dbfb99521285a02c761b62b220ae14ba41b3e09939bbb22"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0012",
+      "features_sha256": "fe1ec38ae9a855f7266e4d80d8e5ea90e873117ecb7eaeac1b8a345981d61ed1"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0013",
+      "features_sha256": "623bb02ead7ebbde92dac3ee8ebac49c3a80d4b56c6f97d28058a5d69bfb6f52"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0014",
+      "features_sha256": "f45364835c9b4bc4bf93c4c415c3845a577a86d70b0608fa64d303cb94f56abf"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0015",
+      "features_sha256": "a5d98e4e1582e4896fa09b2bb4ab90100f4aa3d6a6b46b6dea95b9b47f14eead"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0016",
+      "features_sha256": "1f42a62043896af8863e9d801707e8771cc4ca227568dadd15e83ae4f232fd2c"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0017",
+      "features_sha256": "894b69e57561598ac654d5d138f076433be8d57e424bb185aca3710b52258ce7"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0018",
+      "features_sha256": "97c71d585ec95d99cc73394ea4724541e301377af28be7fb83129d4bb5644e71"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0019",
+      "features_sha256": "cc3c40c2b52eef15f4884acd3d3e9220184495353a7882594d93ed6f09319f4a"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0020",
+      "features_sha256": "903300ce66c2f67bf1b022d9b3d83a1a90d68f42f647915c0d19935e5bc66d25"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0021",
+      "features_sha256": "eecd83d39f9233c6bc046c354f9d5f22d3e146a5a70ee62ed494361ff6bfa887"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0022",
+      "features_sha256": "7cdfe6135a491aec8ab06a24e24ebd0d115fdd7d20b69b2cc4fe1242ada1a9c9"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0023",
+      "features_sha256": "142615902dd02c966296bf0396d367f7d4dd81fd64225e992e254fc8ffaf6dc8"
+    },
+    {
+      "video_id": "synth_v2_train_f1_0024",
+      "features_sha256": "db8a11359081278e64fe886cf8c380786315494fe25beed214f5dd9d65a8c60f"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0001",
+      "features_sha256": "079fe3ff546ba2f75f58fc651657484e75f6fbd16f96e19182f8c6aaccd81e23"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0002",
+      "features_sha256": "c41eb003e4a02e1e32229bd22aed87631ce6a9cead2f8aa503c0c1ca4638d87f"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0003",
+      "features_sha256": "ee3bf174c232a8e497826acdaba7c599e29df605e8ae4e1ac9eace4ae71147fc"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0004",
+      "features_sha256": "2d38b955f7aaf198cb6c6fffdd014bc29a7713e01b310ead839eff4e241364fa"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0005",
+      "features_sha256": "ae11e4f681212d955f2982cd7c34b86889ae093f4050100441d515165bce8f24"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0006",
+      "features_sha256": "230895114d3d07002b3d3bea756c56d0137e9814724955d66330bd68d6cd35b8"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0007",
+      "features_sha256": "34b65e89eeac6708bfcf77426086c03b9c2ef0f77f0ddd3d7340adefcd794061"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0008",
+      "features_sha256": "5cbdfc2ea691bd76c4ebca75d0b928a029205c388df71c86cea74e8bd3bc1f8b"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0009",
+      "features_sha256": "152a2a5507ab8e56a8464071b467aeb0dacafab63765a422d17a0cddd49e0adb"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0010",
+      "features_sha256": "9fecc77fc5861594030fa4cfabd8b433b5d3072083adfde73f078b18e85cfa3f"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0011",
+      "features_sha256": "73de3399ab2fdb47ca7d65ef4f4689b595c92a39c61cb1a6fe61521822375545"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0012",
+      "features_sha256": "707b64ed751948421a3def6f04a837d41b6502f39b644c4559ca3603b97d1466"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0013",
+      "features_sha256": "545f65ec74635733761f3bda2f41b4cf3f8f14964c53d4f2f4857019dc273e13"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0014",
+      "features_sha256": "4223bc05f9a0c7fe05e7cccba00365e51d720f1b59bd8da40afc3042f4022d27"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0015",
+      "features_sha256": "95efedd1dc50de922d9fc36016533b2962044feec9964740967d753e30d486a0"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0016",
+      "features_sha256": "595f4557bc6512ceb2c89db4b37e46d6400c0e57c1ccfa54633ecc282dae723d"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0017",
+      "features_sha256": "8bafe39450264d9a45cdc4b8ace61034ee591b22bc064dca60198c48190c1f73"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0018",
+      "features_sha256": "d2ae43b51ee29809d1e041705fb3f76005b4de80d538ce59b1ca0399af9f0502"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0019",
+      "features_sha256": "942f6bc1e46e0bb222e8d0494e34938607f0b0b7ceaa45c02bf743f6061044fa"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0020",
+      "features_sha256": "a09cb8a13c5bd3ecbe0e7d315c1ed2604869f7f8608c20b82b331dd1bf013e8d"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0021",
+      "features_sha256": "0d107cc36aa74c8bedaa3a449ea5874f21d027b0d96fd2d64c18052ada9c7088"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0022",
+      "features_sha256": "9b2ce79bd5897a8a65b9d18a89461549506261a9031ac75fe324e44f9ee3f4f4"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0023",
+      "features_sha256": "f7e931242c510cd2d8f6422e04e9eb61d0b2f437ec72745d887359851a46ee8e"
+    },
+    {
+      "video_id": "synth_v2_train_f2_0024",
+      "features_sha256": "309f7017f9a2eaed3334a84a7c219f14f862af1e6601df93714dba25c2671697"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0001",
+      "features_sha256": "fee490e855172da01b958c8508bce5286a56c16c5f8378928fb8dc8949b2734f"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0002",
+      "features_sha256": "dc89e4cec7bc7e9b3a9cc929c7060d25b42272d39c94a31b1a0e5f254f17b90a"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0003",
+      "features_sha256": "ba9a1db655cddf12bfce3fbc4a9e3dc19a582a8fc4789a2f4da5d436250f7f9c"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0004",
+      "features_sha256": "02d315ae1f519ef1b6d2adef89bc7ab61577271c2a00a82d37cdadd8c9b6a5bf"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0005",
+      "features_sha256": "d1de5dd9afae936f48c2d3643e248e4ed3a424ed8f94ff686c6dca5063b19010"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0006",
+      "features_sha256": "3a9028871944f45d19897b5c4cd03f7afd0e1bb9873fb518c1d99c3c0d3d32e6"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0007",
+      "features_sha256": "f800bd487d455600e509fee828d149deba1b2257a9b50cade9519b70406d3df6"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0008",
+      "features_sha256": "dadb16e343f186f740a43866f89e3b2ae0341f2938cbf905a62e83c66e29b81c"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0009",
+      "features_sha256": "cf9499c2518a29d74c61407729b8115100ac96b7946b2befc55442eff873f267"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0010",
+      "features_sha256": "b3cd79bfce22f053abb816cc5923a36ef17731caabfbb35d5c7b589fc9150b20"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0011",
+      "features_sha256": "9a1faeba5e08d55ff3bc415e1174d0e056557c44e89afaacdabe9eb3ecefde9e"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0012",
+      "features_sha256": "cada374d0ecd76ecce35fa04e3d30c374be974e47a1f4c01672bddd26468c021"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0013",
+      "features_sha256": "d07659c2c513357d1499a726546ad09376a6455f92924fc2460ed399f8254a42"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0014",
+      "features_sha256": "0e2255b90bbc0adec0dc350e84789ab752c16794264139334cada42efc0f0434"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0015",
+      "features_sha256": "abe22121628318c8200c937faf4849f1a34be659ede2c40174058f6692446817"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0016",
+      "features_sha256": "2f2bcdfb5d6ddd2688baffbbdcf1c08cc0d95ee296ca64cac02480d757aa738b"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0017",
+      "features_sha256": "82dffac6144da533cd0d8f7c48b0ac81fae5a8f53d9fa12bf5e8c83378fae5ee"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0018",
+      "features_sha256": "2c2c780a799555131a93c25947c9118e3de892eb208f42768c7cbbd638c7f073"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0019",
+      "features_sha256": "44ef4de221db49fc2f42547203e52bc4ac563234c7b9947d307f07e121ed219f"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0020",
+      "features_sha256": "8c3d2eaf0833e28c0ceea67d62d0ff049e7b3a2ff9a1cfabcaf71d85a0a1cb14"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0021",
+      "features_sha256": "78fd064799e70fdf35ec915949c1387483f39f69c0d03972080dba2c715fd289"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0022",
+      "features_sha256": "a6181868100f9c17efdb433cb0b416cf4bafef870d3ec097d7471f2263ef9719"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0023",
+      "features_sha256": "0992e2c03e74a263921a1de485109d3d0a851e40b27e1182995ab1e651d52227"
+    },
+    {
+      "video_id": "synth_v2_train_f3_0024",
+      "features_sha256": "6dae4b5146218f9b2235f804d14ee65d5b3d16e79f167ea85ba24f8f1140f819"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0001",
+      "features_sha256": "ddc93b87bf3bb3031161ea1eee02b196cddd1070827890faf57ee3ed1731e611"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0002",
+      "features_sha256": "c81c412686537d41d69bace96473cbdfafe19159edca2007e4a5f08a099d2028"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0003",
+      "features_sha256": "81b41bb4e04e402cf939db26b4c574b6b3a08a2101f055e92e8ff1f4ea1092c2"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0004",
+      "features_sha256": "b5cd927410ca812bc87586a447d2d8ce7b7c320174675e6bb886022629cd7223"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0005",
+      "features_sha256": "3dc76cac447a048f1a4a73ddc49f5df7f8f513be0b129101be934f0396c82a4c"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0006",
+      "features_sha256": "0d4306b06324707699d84c23e77b6d7565a57696e5e87ec19cdc87f06e0b9d30"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0007",
+      "features_sha256": "7e0f0fdf471372e890fc2218e9609091cc607d985d0d37a128e850e6d7774f2b"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0008",
+      "features_sha256": "cad7034437a6abef3cadb86bc710be92d72de5a87dda9b172fbd49adb19b9e5b"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0009",
+      "features_sha256": "324b0aba7f72ebf2dbcb7b86a6ba7ac45875e40b4b11ae7f85d8b3f4d56c9e4b"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0010",
+      "features_sha256": "a876dae100921260db09eab63ed6a6fb9954af7c088ce2a44261f3cd6027f1a0"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0011",
+      "features_sha256": "b2c9bbd75c7358374143ca90ae3c80c87be3f08260e62055bb1430fbb3daa71c"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0012",
+      "features_sha256": "cec6521db749cf97a20f8e7f79e3cc1261feb451455be2468619a174c35693b5"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0013",
+      "features_sha256": "556c91b4533f3ba3cb805e54ed717f38aefe3508fe7f323f6b987be2e86babf2"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0014",
+      "features_sha256": "8d1309c24876f7c74164d4482df73e6fc859b0140452b29a2023d7465e821b4b"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0015",
+      "features_sha256": "54ed2cf898211bc7daf77f1ef0582e45a1d7c7c04a237cef6a8a236b50cc590a"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0016",
+      "features_sha256": "faf71a416d76eb7aa43737bc72742c10c28cae72f994899ffb64edea7967b431"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0017",
+      "features_sha256": "e2155b73a7edfc0410c326fbbe28d18543e816cc87643c8ceb4e28453017d718"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0018",
+      "features_sha256": "e789b132e6ca142d7e35b5f0d6db4d102bb27f3f4c466dd65dfd2b0be8a49853"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0019",
+      "features_sha256": "57dd3a956a984eb916e43d1dac7c4b70e5af52ad455c31cf1cec8e3c641ca7a9"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0020",
+      "features_sha256": "8edcd2c9c28b5d1c1bc7da8ddb4ff6a612970e9161a7e1f5189a12d3c17cf035"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0021",
+      "features_sha256": "3ba485699a682957b5a7ecb0768c3ecc77eaf90d8773f47c181fc4372b3cf3bf"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0022",
+      "features_sha256": "ea3110d5fd0935247986069dfd17042d20c4bf0459a08d9cb12b4c8102c0822d"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0023",
+      "features_sha256": "599efd6fd61e626d222a2b6d3424546e96edd3785ab6fbe5132453bb5adf9765"
+    },
+    {
+      "video_id": "synth_v2_train_f4_0024",
+      "features_sha256": "377b1db3ade3c859db27ff5c6133d5772e22e1c55899c63bae23dac33ebc1a0b"
+    }
+  ],
+  "limitations": [
+    "Exploratory training-data algorithm development; not an unbiased nested-CV estimate.",
+    "Ground-truth exercise windows; no test feature frames are loaded."
+  ]
+}

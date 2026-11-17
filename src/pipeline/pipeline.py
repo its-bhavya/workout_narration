@@ -151,6 +151,9 @@ class WorkoutPipeline:
                     range_deg=count_res.get("range_deg"),
                     flag=count_res.get("flag", ""),
                     valid_fraction=count_res.get("valid_fraction"),
+                    threshold_mode=count_res.get("threshold_mode", ""),
+                    adaptive_window_s=count_res.get("adaptive_window_s"),
+                    threshold_fractions=count_res.get("threshold_fractions"),
                 )
 
             segment_results.append(seg_res)
