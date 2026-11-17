@@ -79,6 +79,7 @@ def evaluate(output_dir, **pipeline_options):
               "experiment_id": pipeline.bundle["experiment_id"],
               "model_path": str(pipeline.model_path), "model_sha256": sha256(pipeline.model_path),
               "counter_source_sha256": sha256(Path(rep_counter.__file__)),
+              "arm_quality_source_sha256": sha256(Path(rep_counter.__file__).with_name("arm_quality.py")),
               "counter_config": rep_counter.EXERCISES,
               "settings": {"predicted_end_padding_s": pipeline.end_pad_s, "oracle_end_padding_s": 0.,
                            "max_gap_s": rep_counter.MAX_GAP_S,

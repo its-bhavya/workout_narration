@@ -59,6 +59,8 @@ class SegmentResult:
     threshold_mode: str = ""
     adaptive_window_s: float | None = None
     threshold_fractions: tuple[float, float] | None = None
+    arm_selection: str = ""
+    arm_candidates: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -80,6 +82,8 @@ class SegmentResult:
             "threshold_mode": self.threshold_mode,
             "adaptive_window_s": self.adaptive_window_s,
             "threshold_fractions": self.threshold_fractions,
+            "arm_selection": self.arm_selection,
+            "arm_candidates": self.arm_candidates,
         }
 
 

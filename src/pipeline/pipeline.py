@@ -154,6 +154,8 @@ class WorkoutPipeline:
                     threshold_mode=count_res.get("threshold_mode", ""),
                     adaptive_window_s=count_res.get("adaptive_window_s"),
                     threshold_fractions=count_res.get("threshold_fractions"),
+                    arm_selection=count_res.get("arm_selection", ""),
+                    arm_candidates=count_res.get("arm_candidates", []),
                 )
 
             segment_results.append(seg_res)

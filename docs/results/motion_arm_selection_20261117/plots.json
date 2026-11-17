@@ -1,0 +1,66 @@
+[
+  {
+    "file": "synth_v2_train_f4_0022_segment_04.png",
+    "video_id": "synth_v2_train_f4_0022",
+    "clip_id": "stu8_44.mp4",
+    "gain": 9,
+    "annotated": 22,
+    "selected_signal": "elbow_R"
+  },
+  {
+    "file": "synth_v2_train_f1_0008_segment_03.png",
+    "video_id": "synth_v2_train_f1_0008",
+    "clip_id": "stu10_49.mp4",
+    "gain": 7,
+    "annotated": 21,
+    "selected_signal": "elbow_L"
+  },
+  {
+    "file": "synth_v2_train_f1_0011_segment_01.png",
+    "video_id": "synth_v2_train_f1_0011",
+    "clip_id": "stu4_43.mp4",
+    "gain": 4,
+    "annotated": 10,
+    "selected_signal": "elbow_R"
+  },
+  {
+    "file": "synth_v2_train_f1_0003_segment_03.png",
+    "video_id": "synth_v2_train_f1_0003",
+    "clip_id": "stu1_51.mp4",
+    "gain": 3,
+    "annotated": 40,
+    "selected_signal": "elbow_L"
+  },
+  {
+    "file": "synth_v2_train_f3_0008_segment_02.png",
+    "video_id": "synth_v2_train_f3_0008",
+    "clip_id": "stu10_46.mp4",
+    "gain": -2,
+    "annotated": 11,
+    "selected_signal": "elbow_L"
+  },
+  {
+    "file": "synth_v2_train_f4_0011_segment_05.png",
+    "video_id": "synth_v2_train_f4_0011",
+    "clip_id": "stu9_51.mp4",
+    "gain": -1,
+    "annotated": 62,
+    "selected_signal": "elbow_R"
+  },
+  {
+    "file": "synth_v2_train_f2_0009_segment_05.png",
+    "video_id": "synth_v2_train_f2_0009",
+    "clip_id": "stu2_53.mp4",
+    "gain": 0,
+    "annotated": 49,
+    "selected_signal": "elbow_L"
+  },
+  {
+    "file": "synth_v2_train_f1_0015_segment_01.png",
+    "video_id": "synth_v2_train_f1_0015",
+    "clip_id": "stu10_49.mp4",
+    "gain": 0,
+    "annotated": 21,
+    "selected_signal": "elbow_R"
+  }
+]

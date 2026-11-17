@@ -74,6 +74,9 @@ EXERCISES = {
         # Local normalization follows changes in camera angle / rep amplitude.
         # Selected on source-disjoint training folds; see PUSHUP_COUNTER_UPDATE.md.
         "adaptive_window_s": 6.0,
+        "arm_selection": "motion",
+        # Training-fold selection among visibility/continuity/periodicity policies.
+        "arm_quality_weights": {"visibility": 2.0, "continuity": 1.0, "periodicity": 4.0},
         "smooth_s": 0.1,
         "min_gap_s": 0.2,
         "min_range_deg": 20.0,
@@ -226,6 +229,30 @@ def clean_signal(
     vals[long_gap] = np.nan
 
     return vals
+
+
+def prepare_candidates(seg, cfg, use_3d=False, arm_selection=None):
+    """Clean and rank arms without using annotations or detected rep counts."""
+    try:
+        from .arm_quality import motion_quality, quality_score
+    except ImportError:  # compatibility with the historical standalone scripts
+        from arm_quality import motion_quality, quality_score
+    fs = sampling_rate(seg["time_s"].to_numpy())
+    candidates = []
+    for name, raw in candidate_signals(seg, cfg, use_3d):
+        signal = clean_signal(raw, fs, MAX_GAP_S, cfg["smooth_s"])
+        valid = float(np.isfinite(signal).mean())
+        span = float(np.nanpercentile(signal, 90) - np.nanpercentile(signal, 10)) if valid else 0.
+        visibility = _side_score(seg, name) if cfg["combine"] == "best" else float(np.isfinite(raw).mean())
+        quality = motion_quality(signal, raw, visibility, fs, cfg["min_range_deg"])
+        candidates.append(dict(signal=name, values=signal, valid_fraction=valid, range_deg=span,
+                               usable=valid >= MIN_VALID_FRACTION and span >= cfg["min_range_deg"],
+                               quality=quality, quality_score=quality_score(quality, cfg.get("arm_quality_weights", {}))))
+    if (arm_selection or cfg.get("arm_selection")) == "motion" and cfg["combine"] == "best":
+        # Stable ties preserve the established visibility preference. Unusable
+        # arms can never displace one passing the existing motion/data guards.
+        candidates.sort(key=lambda c: (c["usable"], c["quality_score"]), reverse=True)
+    return candidates
 
 
 # ---------------------------------------------------------------------
@@ -391,6 +418,7 @@ def count_for_exercise(
     fracs: tuple[float, float] | None = None,
     thresholds: tuple[float, float] | None = None,
     end_pad_s: float = 0.0,
+    arm_selection: str | None = None,
 ) -> dict:
     """
     Count reps of `exercise` in [start_s, end_s + end_pad_s) of a feature table.
@@ -400,6 +428,8 @@ def count_for_exercise(
     end_pad_s: extend the window so a rep cut off at the end of a predicted
         segment can still complete (use ~0.3 for predicted segments, 0 for
         ground-truth segments).
+    arm_selection: "visibility" reproduces the previous arm preference;
+        "motion" uses the configured quality score. None uses the exercise default.
 
     Returns
         {exercise, reps, rep_times (s), thresholds, signal, range_deg, fs,
@@ -407,6 +437,8 @@ def count_for_exercise(
     where flag is "" or one of: too_short, mostly_missing, low_motion.
     """
 
+    if arm_selection not in (None, "visibility", "motion"):
+        raise ValueError("arm_selection must be 'visibility' or 'motion'")
     cfg = EXERCISES[exercise]
 
     result = {
@@ -435,14 +467,16 @@ def count_for_exercise(
     if fs < MIN_FS_HZ:
         logger.warning("Sampling rate %.1f Hz is low for rep counting.", fs)
 
-    # Try the preferred signal first; fall back to the other side only if the
-    # first one is mostly missing or shows no real motion.
+    # Push-ups rank usable arms by motion quality; other exercises retain
+    # their existing visibility preference or mean signal.
     chosen = None
     first_problem = None
 
-    for used, raw in candidate_signals(seg, cfg, use_3d):
-        sig = clean_signal(raw, fs, MAX_GAP_S, cfg["smooth_s"])
-        valid = float(np.mean(~np.isnan(sig)))
+    candidates = prepare_candidates(seg, cfg, use_3d, arm_selection)
+    result["arm_candidates"] = [{k: v for k, v in c.items() if k != "values"} for c in candidates]
+    result["arm_selection"] = arm_selection or cfg.get("arm_selection", "visibility")
+    for candidate in candidates:
+        used, sig, valid = candidate["signal"], candidate["values"], candidate["valid_fraction"]
 
         if valid < MIN_VALID_FRACTION:
             problem = ("mostly_missing", used, valid, float("nan"))

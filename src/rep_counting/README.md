@@ -75,3 +75,19 @@ Reproduce training-only selection with:
 
 This reports settings; it never rewrites defaults automatically. The original
 final-test baseline is preserved separately from the follow-up evaluation.
+
+## Motion-aware push-up arm selection and diagnostic plots
+
+Push-ups select a usable elbow signal using visibility, continuity, and periodic
+motion quality. Scores and both arm candidates are exported with segment results.
+Use `count_for_exercise(..., arm_selection="visibility")` to compare the previous
+arm preference. The scorer does not use predicted or annotated rep counts.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.validate_arm_selection --out-dir outputs/arm_selection/new_validation --plots 8
+```
+
+This selects and validates quality weights using training folds only, checks
+runtime agreement, and writes per-arm/segment CSVs, fold metrics, and diagnostic
+plots. It does not change defaults automatically or evaluate test features.
+See [results and diagnostic plots](../../docs/results/MOTION_ARM_SELECTION.md).
