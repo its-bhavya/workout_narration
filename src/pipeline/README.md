@@ -28,6 +28,29 @@ No raw-video/native-clip extraction or person-selector redesign is implemented
 here. Existing pose features remain annotation-assisted upstream; this limitation
 is documented in the project and paper context.
 
+## Counter alternatives and integration status
+
+The integrated pipeline still uses the 2D state-machine defaults, including
+local push-up normalization and motion-aware arm selection. Neither the optional
+peak detector nor 3D squat counting has been promoted into this flow.
+
+Peak detection uses prominence and width, optional capped autocorrelation-guided
+spacing, and post-peak recovery completion times. On source-disjoint training
+folds, guided-peak MAE is 4.413/2.981/1.153 for jumping jacks/push-ups/squats,
+versus current state-machine MAE 5.288/2.865/1.594. Unguided peaks do as well
+or better; guidance is not an established improvement.
+
+In a separate 2D/3D comparison with parameters selected on other folds, the best
+development choices are 2D peaks for jumping jacks (MAE 4.435), 2D state machine
+for push-ups (2.865), and 3D state machine for squats (0.928). This peak number
+selects from both guidance modes and is different from the guided-only score.
+These are source-weighted counts inside GT windows, not predicted-segment
+end-to-end accuracy. No test features were used in either experiment.
+
+See [counter methods and full tables](../rep_counting/README.md),
+[peak artifacts](../../docs/results/PEAK_COUNTER_EXPERIMENT.md), and
+[2D/3D artifacts](../../docs/results/SIGNAL_DIMENSIONS_COMPARISON.md).
+
 <!-- v2-model-results:start -->
 ## Completed v2 model experiment — 17 November 2026
 

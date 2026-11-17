@@ -9,6 +9,45 @@ not audio or a narrated MP4.
 
 Current training/evaluation and integration guide: [V2_TRAINING.md](docs/V2_TRAINING.md).
 
+## Rep-counting alternatives: current findings (17 November 2026)
+
+The state-machine counter remains the integrated default. Experimental peak
+counting detects prominent, sufficiently wide motion extrema, optionally uses
+capped autocorrelation-guided spacing, and timestamps recovery after the
+extremum. Cached world-3D angles are compared with 2D using the same signal
+cleaning and arm-selection rules; missing 3D columns cannot fall back to 2D.
+
+Five source-disjoint training folds evaluate 460 GT-window exercise segments.
+MAE averages source clips within each fold, then averages folds; it is not
+end-to-end test MAE. Peak-family settings are selected on the other four folds:
+
+| Exercise | Current 2D state machine | Guided peaks | Unguided peaks |
+|---|---:|---:|---:|
+| Jumping jacks | 5.288 | 4.413 | 4.204 |
+| Push-ups | 2.865 | 2.981 | 2.827 |
+| Squats | 1.594 | 1.153 | 1.150 |
+
+A separate paired 2D/3D study tunes parameters independently on other folds.
+Its peak search includes both guided and unguided settings:
+
+| Exercise | State machine 2D | State machine 3D | Peaks 2D | Peaks 3D |
+|---|---:|---:|---:|---:|
+| Jumping jacks | 4.562 | 4.913 | 4.435 | 5.414 |
+| Push-ups | 2.865 | 5.205 | 2.993 | 4.968 |
+| Squats | 1.370 | 0.928 | 1.197 | 0.992 |
+
+3D state-machine squats, 2D state-machine push-ups, and 2D peaks for jumping
+jacks are the strongest development combination here. It has not replaced
+the pipeline default. Guidance itself did not consistently beat unguided peaks.
+These are exploratory GT-window training results, not new test scores or an
+unbiased nested-CV estimate. Pose person selection remains annotation-assisted.
+
+Methods, fixed-settings results, tuning grids, and commands are documented in
+[the rep-counting README](src/rep_counting/README.md). Existing
+[peak](docs/results/PEAK_COUNTER_EXPERIMENT.md) and
+[2D/3D](docs/results/SIGNAL_DIMENSIONS_COMPARISON.md) reports retain plots,
+per-segment predictions, timing metrics, source hashes, and selected settings.
+
 ## Data preparation and v2 protocol
 
 Active protocol and provenance: [PROJECT_CONTEXT](docs/PROJECT_CONTEXT.md).
