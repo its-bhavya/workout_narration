@@ -7,7 +7,7 @@ with ground-truth segment labels.
 Usage
 -----
     python src/data_pipeline/concatenate_videos.py \\
-        --splits-file data/manifests/splits.csv \\
+        --splits-file data/manifests/splits_v2.csv \\
         --n-train 24 --n-val 6 --n-test 15 \\
         --seed 42 --out data/synthetic \\
         --pilot
@@ -33,6 +33,7 @@ import argparse
 import csv
 import json
 import logging
+import os
 import random
 import sys
 from collections import defaultdict
@@ -56,10 +57,14 @@ FOURCC      = cv2.VideoWriter_fourcc(*"mp4v")
 K_MIN = 3
 K_MAX = 5
 
+# Cumulative clip-use caps (batch 1 + batch 2 + …)
+CUMULATIVE_CAPS = {"train": 5, "val": 2, "test": 1}
+
 INCLUDE_STATUSES = {"pass", "review"}
 EXCLUDE_FPS_BELOW = 20.0
 
-REPCOUNT_ROOT = Path(r"C:\Users\Bhavya\Downloads\RepCountA (1)\LLSP")
+REPCOUNT_ROOT = Path(os.environ.get(
+    "REPCOUNT_ROOT", r"C:\Users\Bhavya\Downloads\RepCountA (1)\LLSP"))
 VIDEO_DIR = REPCOUNT_ROOT / "video"
 
 logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
@@ -102,7 +107,7 @@ class RawSegment:
 # ---------------------------------------------------------------------------
 
 def find_video(clip_id: str, original_split: str) -> Path | None:
-    for sp in [original_split, "train", "valid", "test"]:
+    for sp in ["valid" if original_split == "val" else original_split, "train", "valid", "test"]:
         p = VIDEO_DIR / sp / clip_id
         if p.exists():
             return p
@@ -202,6 +207,7 @@ def load_pool(
 
 def load_exclusions(path: Path) -> set[str]:
     if not path.exists():
+        log.info("no manual exclusions file found")
         return set()
     df = pd.read_csv(path)
     return set(df["clip_id"].tolist())
@@ -215,10 +221,17 @@ def sample_sequence(
     k: int,
     exercise_pool: dict[str, list[ClipInfo]],
     rng: random.Random,
-    used_clips: set[str] | None,   # None = train (reuse OK)
+    used_clips: set[str] | None,   # None = train (reuse OK across videos)
+    used_in_video: set[str] | None = None,
 ) -> list[ClipInfo] | None:
-    """Sample k clips with adjacent-exercise constraint and ≥2 distinct exercises."""
+    """Sample k clips with adjacent-exercise constraint and ≥2 distinct exercises.
 
+    used_clips    : clips excluded entirely (None = no exclusion).
+    used_in_video : clips already picked in this video — prevents the same
+                    clip appearing twice in one video.  None = not checked
+                    (preserves batch-1 behaviour where train clips could
+                    repeat within a video).
+    """
     exercises = list(exercise_pool.keys())
     if len(exercises) < 2:
         return None
@@ -226,6 +239,7 @@ def sample_sequence(
     for _attempt in range(200):
         seq: list[ClipInfo] = []
         prev_ex = None
+        local_used: set[str] = set() if used_in_video is None else set(used_in_video)
 
         for _ in range(k):
             # Build candidate exercises (must differ from previous)
@@ -235,11 +249,13 @@ def sample_sequence(
                 break
             ex = rng.choice(candidates)
             clips = [c for c in exercise_pool[ex]
-                     if used_clips is None or c.clip_id not in used_clips]
+                     if (used_clips is None or c.clip_id not in used_clips)
+                     and c.clip_id not in local_used]
             if not clips:
                 break
             clip = rng.choice(clips)
             seq.append(clip)
+            local_used.add(clip.clip_id)
             prev_ex = ex
 
         if len(seq) == k and len({c.exercise for c in seq}) >= 2:
@@ -404,34 +420,33 @@ def write_video(
         raise RuntimeError(f"Cannot open VideoWriter for {out_path}")
 
     total_written = 0
-
-    for clip in clips:
-        vp = find_video(clip.clip_id, orig_map.get(clip.clip_id, "train"))
-        if vp is None:
-            writer.release()
-            raise FileNotFoundError(f"Video not found: {clip.clip_id}")
-
-        cap = cv2.VideoCapture(str(vp))
-        n_out = round(clip.total_frames * TARGET_FPS / clip.src_fps)
-
-        out_frame_offset = total_written
-
-        for out_f in range(n_out):
-            src_idx = resample_index(
-                out_frame_offset + out_f, out_frame_offset,
-                clip.src_fps, clip.total_frames
-            )
-            cap.set(cv2.CAP_PROP_POS_FRAMES, src_idx)
-            ok, frame = cap.read()
-            if not ok or frame is None:
-                frame = np.zeros((TARGET_H, TARGET_W, 3), dtype=np.uint8)
-            frame = letterbox_frame(frame, TARGET_W, TARGET_H)
-            writer.write(frame)
-
-        cap.release()
-        total_written += n_out
-
-    writer.release()
+    try:
+        for clip in clips:
+            vp = find_video(clip.clip_id, orig_map.get(clip.clip_id, "train"))
+            if vp is None:
+                raise FileNotFoundError(f"Video not found: {clip.clip_id}")
+            cap = cv2.VideoCapture(str(vp))
+            try:
+                if not cap.isOpened():
+                    raise RuntimeError(f"Cannot open source video: {vp}")
+                n_out = round(clip.total_frames * TARGET_FPS / clip.src_fps)
+                decoded = -1
+                frame = None
+                for out_f in range(n_out):
+                    src_idx = resample_index(out_f, 0, clip.src_fps, clip.total_frames)
+                    # Sequential decode preserves the exact nearest-frame map
+                    # without an expensive keyframe seek for every output frame.
+                    while decoded < src_idx:
+                        ok, frame = cap.read()
+                        if not ok or frame is None:
+                            raise RuntimeError(f"Source decode failed: {clip.clip_id} frame {decoded+1}; no footage substituted")
+                        decoded += 1
+                    writer.write(letterbox_frame(frame, TARGET_W, TARGET_H))
+                total_written += n_out
+            finally:
+                cap.release()
+    finally:
+        writer.release()
     return total_written
 
 
@@ -448,12 +463,22 @@ def make_video(
     splits_file: str,
     seed: int,
     orig_map: dict[str, str],
+    batch_id: int = 1,
+    run_id: str | None = None,
+    fold: int | None = None,
+    plan_hash: str | None = None,
 ) -> dict:
     """Generate one video + JSON; return index row dict."""
 
     out_dir.mkdir(parents=True, exist_ok=True)
     mp4_path  = out_dir / f"{video_id}.mp4"
     json_path = out_dir / f"{video_id}.json"
+
+    # Abort if target files already exist (append-mode safety)
+    if mp4_path.exists():
+        raise FileExistsError(f"Target video already exists: {mp4_path}")
+    if json_path.exists():
+        raise FileExistsError(f"Target JSON already exists: {json_path}")
 
     log.info("Writing %s (%d clips)…", video_id, len(clips))
     n_frames = write_video(clips, mp4_path, orig_map)
@@ -497,6 +522,8 @@ def make_video(
         "clip_join_frames":  clip_join_frames,
         "segments":    [seg_to_dict(s) for s in segments],
     }
+    if run_id is not None:
+        meta.update(run_id=run_id, fold=fold, plan_hash=plan_hash)
 
     with open(json_path, "w") as fh:
         json.dump(meta, fh, indent=2)
@@ -512,8 +539,115 @@ def make_video(
         "transition_frame_share": round(trans_share, 4),
         "direct_cuts":            direct_cuts,
         "seed":                   seed,
+        "batch":                  batch_id,
     }
+    if run_id is not None:
+        index_row.update(fold=fold, run_id=run_id)
     return index_row
+
+
+# ---------------------------------------------------------------------------
+# Resumability helpers
+# ---------------------------------------------------------------------------
+
+def append_index_row(index_path: Path, row: dict) -> None:
+    """Append a single row to the index CSV (fast, no full rewrite)."""
+    index_path.parent.mkdir(parents=True, exist_ok=True)
+    write_header = not index_path.exists()
+    if write_header:
+        fieldnames = list(row.keys())
+    else:
+        with open(index_path, "r", newline="") as fh:
+            fieldnames = next(csv.reader(fh))
+    with open(index_path, "a", newline="") as fh:
+        writer = csv.DictWriter(fh, fieldnames=fieldnames, extrasaction="ignore")
+        if write_header:
+            writer.writeheader()
+        writer.writerow(row)
+
+
+def save_checkpoint(
+    checkpoint_path: Path,
+    batch_id: int,
+    seed: int,
+    splits_order: list[str],
+    current_split_idx: int,
+    current_vid_idx: int,
+    video_counters: dict[str, int],
+    batch_usage_all: dict[str, dict[str, int]],
+    rng_state: tuple,
+) -> None:
+    """Persist RNG state and per-split batch usage for resumable rendering."""
+    ckpt = {
+        "batch_id": batch_id,
+        "seed": seed,
+        "splits_order": splits_order,
+        "current_split_idx": current_split_idx,
+        "current_vid_idx": current_vid_idx,
+        "video_counters": dict(video_counters),
+        "batch_usage": {s: dict(u) for s, u in batch_usage_all.items()},
+        # rng.getstate() → (version, internalstate_tuple, gauss_next)
+        "rng_state": [rng_state[0], list(rng_state[1]), rng_state[2]],
+    }
+    checkpoint_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(checkpoint_path, "w") as fh:
+        json.dump(ckpt, fh)
+
+
+def load_checkpoint(checkpoint_path: Path) -> dict | None:
+    """Load checkpoint JSON, or return None if it doesn't exist."""
+    if not checkpoint_path.exists():
+        return None
+    with open(checkpoint_path) as fh:
+        return json.load(fh)
+
+
+def reconstruct_row_from_json(json_path: Path, batch_id: int) -> dict:
+    """Reconstruct an index row from an existing video .json file."""
+    with open(json_path) as fh:
+        meta = json.load(fh)
+    segments = meta["segments"]
+    n_frames = meta["n_frames"]
+    fps = meta["fps"]
+
+    trans_frames = sum(
+        s["end_frame"] - s["start_frame"] for s in segments
+        if s["type"] == "transition"
+    )
+    trans_share = trans_frames / n_frames if n_frames else 0.0
+
+    clip_join_frames = meta.get("clip_join_frames", [])
+    direct_cuts = 0
+    for jf in clip_join_frames:
+        for seg in segments:
+            if seg["start_frame"] <= jf < seg["end_frame"]:
+                if seg["type"] == "exercise":
+                    direct_cuts += 1
+                break
+
+    exercises_used = sorted({s["label"] for s in segments if s["type"] == "exercise"})
+
+    return {
+        "video_id":               meta["video_id"],
+        "split":                  meta["split"],
+        "n_segments":             len(segments),
+        "duration_s":             round(n_frames / fps, 3),
+        "exercises":              "|".join(exercises_used),
+        "source_clips":           "|".join(meta["clip_ids_in_order"]),
+        "transition_frame_share": round(trans_share, 4),
+        "direct_cuts":            direct_cuts,
+        "seed":                   meta["seed"],
+        "batch":                  batch_id,
+    }
+
+
+def load_indexed_video_ids(index_path: Path) -> set[str]:
+    """Read synthetic_index.csv and return the set of video_ids already present."""
+    if not index_path.exists():
+        return set()
+    with open(index_path, "r", newline="") as fh:
+        reader = csv.DictReader(fh)
+        return {r["video_id"] for r in reader}
 
 
 # ---------------------------------------------------------------------------
@@ -529,61 +663,190 @@ def run_batch(
     seed: int,
     pilot: bool,
     orig_map: dict[str, str],
+    append: bool = False,
+    batch_id: int = 1,
+    cumulative_usage: dict[str, int] | None = None,
+    start_counters: dict[str, int] | None = None,
+    # Resumability parameters (append mode only):
+    checkpoint_path: Path | None = None,
+    index_path: Path | None = None,
+    usage_path: Path | None = None,
+    manifest_path: Path | None = None,
 ) -> list[dict]:
-    """Generate all synthetic videos; return index rows."""
+    """Generate all synthetic videos; return index rows.
 
-    rng = random.Random(seed)
+    append=False (batch-1 mode): original behaviour unchanged.
+
+    append=True (batch-2+ mode): cumulative caps enforced, balancing
+    uses cumulative+batch usage, "clip never twice in one video" is
+    enforced for ALL splits, video numbering continues from
+    start_counters, and batch_id is written to each index row.
+
+    When *checkpoint_path* is provided (append mode), the function
+    saves a checkpoint after every video (RNG state + batch usage +
+    progress).  If interrupted and re-run with the same arguments,
+    it resumes from the checkpoint.  The index, clip_usage and
+    batch_manifest are also updated incrementally so they stay
+    consistent with the rendered files.
+    """
+
+    splits_order = list(counts.keys())
+
+    # ---- Load checkpoint or initialise fresh ----
+    ckpt = None
+    if append and checkpoint_path:
+        ckpt = load_checkpoint(checkpoint_path)
+        if ckpt is not None:
+            if ckpt["batch_id"] != batch_id or ckpt["seed"] != seed:
+                log.warning("Checkpoint batch_id/seed mismatch — starting fresh")
+                ckpt = None
+            elif ckpt["splits_order"] != splits_order:
+                log.warning("Checkpoint splits_order mismatch — starting fresh")
+                ckpt = None
+
+    if ckpt is not None:
+        rng = random.Random(seed)
+        rng.setstate((ckpt["rng_state"][0],
+                      tuple(ckpt["rng_state"][1]),
+                      ckpt["rng_state"][2]))
+        video_counters = ckpt["video_counters"]
+        batch_usage_all: dict[str, dict[str, int]] = {
+            s: defaultdict(int, u) for s, u in ckpt["batch_usage"].items()
+        }
+        start_split_idx = ckpt["current_split_idx"]
+        start_vid_idx = ckpt["current_vid_idx"]
+        log.info("Resumed from checkpoint: split=%s, next_vid_idx=%d",
+                 splits_order[start_split_idx], start_vid_idx)
+    else:
+        rng = random.Random(seed)
+        video_counters = (
+            dict(start_counters) if start_counters else defaultdict(int)
+        )
+        batch_usage_all = {}
+        start_split_idx = 0
+        start_vid_idx = 0
+
+    # Set of video_ids already in the index (to avoid duplicate rows)
+    indexed_video_ids: set[str] = set()
+    if append and index_path and index_path.exists():
+        indexed_video_ids = load_indexed_video_ids(index_path)
+
     index_rows: list[dict] = []
 
-    # Global video counter per split
-    video_counters: dict[str, int] = defaultdict(int)
-
-    for split, n_videos in counts.items():
+    for split_idx in range(start_split_idx, len(splits_order)):
+        split = splits_order[split_idx]
+        n_videos = counts[split]
         split_pool = pool.get(split, [])
         if not split_pool:
             log.warning("No clips in pool for split=%s", split)
             continue
+
+        cap = CUMULATIVE_CAPS[split]
 
         # Group pool by exercise
         ex_pool: dict[str, list[ClipInfo]] = defaultdict(list)
         for c in split_pool:
             ex_pool[c.exercise].append(c)
 
-        used_clips: set[str] | None = set() if split in ("val", "test") else None
-        usage: dict[str, int] = defaultdict(int)
+        if append:
+            if split not in batch_usage_all:
+                batch_usage_all[split] = defaultdict(int)
+            batch_usage = batch_usage_all[split]
+        else:
+            used_clips: set[str] | None = set() if split in ("val", "test") else None
+            usage: dict[str, int] = defaultdict(int)
 
         if pilot:
             n_videos = 1
 
-        for vid_idx in range(n_videos):
+        # Resume position within this split
+        vid_start = start_vid_idx if split_idx == start_split_idx else 0
+        start_vid_idx = 0  # reset for subsequent splits
+
+        for vid_idx in range(vid_start, n_videos):
             k = rng.randint(K_MIN, K_MAX)
 
-            # For balanced usage, sort each exercise pool by usage count
-            balanced_ex_pool: dict[str, list[ClipInfo]] = {}
-            for ex, clips in ex_pool.items():
-                available = [c for c in clips
-                             if used_clips is None or c.clip_id not in used_clips]
-                balanced_ex_pool[ex] = balance_usage(available, usage)
+            if append:
+                balanced_ex_pool: dict[str, list[ClipInfo]] = {}
+                for ex, clips in ex_pool.items():
+                    available = []
+                    for c in clips:
+                        total = (cumulative_usage or {}).get(c.clip_id, 0) \
+                                + batch_usage.get(c.clip_id, 0)
+                        if total < cap:
+                            available.append(c)
+                    available.sort(
+                        key=lambda c: (cumulative_usage or {}).get(c.clip_id, 0)
+                                      + batch_usage.get(c.clip_id, 0)
+                    )
+                    balanced_ex_pool[ex] = available
+            else:
+                balanced_ex_pool = {}
+                for ex, clips in ex_pool.items():
+                    available = [c for c in clips
+                                 if used_clips is None or c.clip_id not in used_clips]
+                    balanced_ex_pool[ex] = balance_usage(available, usage)
 
-            seq = sample_sequence(k, balanced_ex_pool, rng, used_clips)
+            if append:
+                seq = sample_sequence(k, balanced_ex_pool, rng,
+                                       used_clips=set(),
+                                       used_in_video=set())
+            else:
+                seq = sample_sequence(k, balanced_ex_pool, rng, used_clips)
+
             if seq is None:
                 log.warning("Pool exhausted for split=%s after %d videos", split, vid_idx)
                 break
 
-            # Mark used (val/test only)
-            if used_clips is not None:
+
+            if append:
                 for c in seq:
-                    used_clips.add(c.clip_id)
+                    batch_usage[c.clip_id] += 1
+            else:
+                if used_clips is not None:
+                    for c in seq:
+                        used_clips.add(c.clip_id)
+                for c in seq:
+                    usage[c.clip_id] += 1
 
-            # Update usage counters
-            for c in seq:
-                usage[c.clip_id] += 1
-
-            video_counters[split] += 1
+            video_counters[split] = video_counters.get(split, 0) + 1
             nn = video_counters[split]
-            video_id = f"synth_{split}_{nn:04d}"
+            video_id = f"fixture_{split}_{nn:04d}"
 
             out_dir = out_base / split
+            mp4_path = out_dir / f"{video_id}.mp4"
+            json_path = out_dir / f"{video_id}.json"
+
+            _bid = batch_id if append else 1
+
+            if mp4_path.exists() and json_path.exists():
+                # ---- Skip: video already rendered (previous interrupted run) ----
+                log.info("Skipping %s (files already exist)", video_id)
+                row = reconstruct_row_from_json(json_path, _bid)
+                index_rows.append(row)
+
+                if append and checkpoint_path:
+                    if video_id not in indexed_video_ids:
+                        # Orphaned file — recover it into the index/manifests
+                        append_index_row(index_path, row)
+                        update_clip_usage(usage_path, [row], batch_id)
+                        append_batch_manifest([row], manifest_path)
+                        indexed_video_ids.add(video_id)
+                        log.info("Recovered %s into index", video_id)
+                    save_checkpoint(
+                        checkpoint_path, batch_id, seed, splits_order,
+                        split_idx, vid_idx + 1, video_counters,
+                        batch_usage_all, rng.getstate(),
+                    )
+                continue
+
+            if mp4_path.exists() and not json_path.exists():
+                # Preserve interrupted footage before re-rendering.
+                log.warning("Corrupted: %s exists without .json — re-rendering", mp4_path.name)
+                from generate_v2 import archive_partial
+                archive_partial(mp4_path, out_base)
+
+            # ---- Normal path: render the video ----
             row = make_video(
                 video_id=video_id,
                 clips=seq,
@@ -593,28 +856,280 @@ def run_batch(
                 splits_file=splits_file,
                 seed=seed,
                 orig_map=orig_map,
+                batch_id=_bid,
             )
             index_rows.append(row)
 
-        log.info("Split %s: generated %d videos", split, video_counters[split])
+            # ---- Incremental persistence (append mode) ----
+            if append and checkpoint_path:
+                append_index_row(index_path, row)
+                update_clip_usage(usage_path, [row], batch_id)
+                append_batch_manifest([row], manifest_path)
+                indexed_video_ids.add(video_id)
+                save_checkpoint(
+                    checkpoint_path, batch_id, seed, splits_order,
+                    split_idx, vid_idx + 1, video_counters,
+                    batch_usage_all, rng.getstate(),
+                )
+
+        generated = video_counters.get(split, 0) - (start_counters or {}).get(split, 0)
+        log.info("Split %s: generated %d videos", split, generated)
+
+    # ---- Clean up checkpoint when batch is complete ----
+    if append and checkpoint_path and checkpoint_path.exists():
+        from generate_v2 import archive_partial
+        archive_partial(checkpoint_path, checkpoint_path.parent)
+        log.info("Checkpoint archived (batch complete): %s", checkpoint_path)
 
     return index_rows
+
+
+# ---------------------------------------------------------------------------
+# Clip-usage tracking (cumulative across batches)
+# ---------------------------------------------------------------------------
+
+CLIP_USAGE_COLS = ["clip_id", "split", "exercise", "times_used", "batch"]
+
+
+def init_clip_usage(index_path: Path, usage_path: Path) -> dict[str, int]:
+    """Create or load clip_usage.csv from synthetic_index.csv.
+
+    If *usage_path* exists it is loaded and returned (never reset).
+    Otherwise it is built from *index_path* with every clip set to
+    times_used = total appearances and batch = 1.
+
+    Returns {clip_id: times_used} (flat, cross-split).
+    """
+    if usage_path.exists():
+        df_u = pd.read_csv(usage_path)
+        return dict(zip(df_u["clip_id"], df_u["times_used"]))
+
+    if not index_path.exists():
+        return {}
+
+    df = pd.read_csv(index_path)
+    splits_df = pd.read_csv("data/manifests/splits_v2.csv")
+    ex_map = dict(zip(splits_df["clip_id"], splits_df["exercise"]))
+    sp_map = dict(zip(splits_df["clip_id"], splits_df["split"]))
+
+    usage: dict[str, dict] = {}
+    for _, row in df.iterrows():
+        for clip_id in str(row["source_clips"]).split("|"):
+            if clip_id not in usage:
+                usage[clip_id] = {
+                    "clip_id": clip_id,
+                    "split": sp_map.get(clip_id, ""),
+                    "exercise": ex_map.get(clip_id, ""),
+                    "times_used": 0,
+                    "batch": 1,
+                }
+            usage[clip_id]["times_used"] += 1
+
+    rows = list(usage.values())
+    usage_path.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame(rows, columns=CLIP_USAGE_COLS).to_csv(usage_path, index=False)
+    log.info("clip_usage.csv initialised: %s (%d clips)", usage_path, len(rows))
+    return {r["clip_id"]: r["times_used"] for r in rows}
+
+
+def update_clip_usage(
+    usage_path: Path,
+    new_rows: list[dict],
+    batch_id: int,
+) -> dict[str, int]:
+    """Increment times_used for every clip in new_rows and write back."""
+    df_u = pd.read_csv(usage_path)
+
+    for row in new_rows:
+        for clip_id in str(row["source_clips"]).split("|"):
+            mask = df_u["clip_id"] == clip_id
+            if mask.any():
+                df_u.loc[mask, "times_used"] += 1
+                df_u.loc[mask, "batch"] = batch_id
+            else:
+                splits_df = pd.read_csv("data/manifests/splits_v2.csv")
+                ex_map = dict(zip(splits_df["clip_id"], splits_df["exercise"]))
+                sp_map = dict(zip(splits_df["clip_id"], splits_df["split"]))
+                new = pd.DataFrame([{
+                    "clip_id": clip_id,
+                    "split": sp_map.get(clip_id, ""),
+                    "exercise": ex_map.get(clip_id, ""),
+                    "times_used": 1,
+                    "batch": batch_id,
+                }], columns=CLIP_USAGE_COLS)
+                df_u = pd.concat([df_u, new], ignore_index=True)
+
+    df_u.to_csv(usage_path, index=False)
+    log.info("clip_usage.csv updated: %s", usage_path)
+    return dict(zip(df_u["clip_id"], df_u["times_used"]))
+
+
+# ---------------------------------------------------------------------------
+# Batch manifest
+# ---------------------------------------------------------------------------
+
+BATCH_MANIFEST_COLS = ["video_id", "split", "batch", "seed"]
+
+
+def init_batch_manifest(index_path: Path, manifest_path: Path) -> None:
+    """Create batch_manifest.csv from existing index if it doesn't exist."""
+    if manifest_path.exists():
+        return
+    if not index_path.exists():
+        manifest_path.parent.mkdir(parents=True, exist_ok=True)
+        pd.DataFrame(columns=BATCH_MANIFEST_COLS).to_csv(manifest_path, index=False)
+        return
+
+    df = pd.read_csv(index_path)
+    rows = []
+    for _, r in df.iterrows():
+        rows.append({
+            "video_id": r["video_id"],
+            "split":    r["split"],
+            "batch":    r.get("batch", 1),
+            "seed":     r["seed"],
+        })
+    pd.DataFrame(rows, columns=BATCH_MANIFEST_COLS).to_csv(manifest_path, index=False)
+    log.info("batch_manifest.csv initialised: %s (%d rows)", manifest_path, len(rows))
+
+
+def append_batch_manifest(
+    new_rows: list[dict],
+    manifest_path: Path,
+) -> None:
+    """Append new video rows to batch_manifest.csv."""
+    manifest_path.parent.mkdir(parents=True, exist_ok=True)
+    rows = []
+    for r in new_rows:
+        rows.append({
+            "video_id": r["video_id"],
+            "split":    r["split"],
+            "batch":    r["batch"],
+            "seed":     r["seed"],
+        })
+    if manifest_path.exists():
+        existing = pd.read_csv(manifest_path)
+        combined = pd.concat([existing, pd.DataFrame(rows, columns=BATCH_MANIFEST_COLS)],
+                              ignore_index=True)
+    else:
+        combined = pd.DataFrame(rows, columns=BATCH_MANIFEST_COLS)
+    combined.to_csv(manifest_path, index=False)
+    log.info("batch_manifest.csv updated: %s (%d total rows)", manifest_path, len(combined))
 
 
 # ---------------------------------------------------------------------------
 # Index CSV
 # ---------------------------------------------------------------------------
 
-def write_index(rows: list[dict], path: Path) -> None:
+def write_index(
+    rows: list[dict],
+    path: Path,
+    append: bool = False,
+) -> None:
+    """Write (or append) index rows to CSV.
+
+    When append=False the file is overwritten (batch-1 behaviour).
+    When append=True existing rows are read, a ``batch`` column is
+    added to them (default 1) if missing, and new rows are appended.
+    """
     path.parent.mkdir(parents=True, exist_ok=True)
-    if not rows:
+    if not rows and not append:
         return
-    fieldnames = list(rows[0].keys())
-    with open(path, "w", newline="") as fh:
-        writer = csv.DictWriter(fh, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(rows)
-    log.info("Index written: %s  (%d rows)", path, len(rows))
+
+    if append and path.exists():
+        existing_df = pd.read_csv(path)
+        if "batch" not in existing_df.columns:
+            existing_df["batch"] = 1
+        new_df = pd.DataFrame(rows)
+        combined = pd.concat([existing_df, new_df], ignore_index=True)
+        fieldnames = list(combined.columns)
+        combined.to_csv(path, index=False)
+        log.info("Index appended: %s (%d total rows)", path, len(combined))
+    else:
+        fieldnames = list(rows[0].keys()) if rows else []
+        with open(path, "w", newline="") as fh:
+            writer = csv.DictWriter(fh, fieldnames=fieldnames)
+            writer.writeheader()
+            writer.writerows(rows)
+        log.info("Index written: %s (%d rows)", path, len(rows))
+
+
+# ---------------------------------------------------------------------------
+# Plan-only (no rendering)
+# ---------------------------------------------------------------------------
+
+def load_existing_usage(index_path: Path) -> dict[str, dict[str, int]]:
+    """Read synthetic_index.csv → {split -> {clip_id -> times_used}}."""
+    if not index_path.exists():
+        return defaultdict(lambda: defaultdict(int))
+    df = pd.read_csv(index_path)
+    usage: dict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
+    for _, row in df.iterrows():
+        split = row["split"]
+        for clip_id in str(row["source_clips"]).split("|"):
+            usage[split][clip_id] += 1
+    return usage
+
+
+def run_plan_only(
+    pool: dict[str, list[ClipInfo]],
+    index_path: Path,
+) -> None:
+    """Compute and print max additional videos per split under cumulative caps.
+
+    No video files are written.
+    """
+    existing_usage = load_existing_usage(index_path)
+
+    print("=" * 64)
+    print("PLAN-ONLY: max additional videos under cumulative caps")
+    print("=" * 64)
+
+    for split in ["train", "val", "test"]:
+        split_pool = pool.get(split, [])
+        cap = CUMULATIVE_CAPS[split]
+        usage_split = existing_usage.get(split, {})
+
+        # remaining slots per clip
+        remaining: dict[str, int] = {}
+        for c in split_pool:
+            rem = cap - usage_split.get(c.clip_id, 0)
+            if rem > 0:
+                remaining[c.clip_id] = rem
+
+        # remaining slots per exercise
+        ex_slots: dict[str, int] = defaultdict(int)
+        for c in split_pool:
+            rem = remaining.get(c.clip_id, 0)
+            if rem > 0:
+                ex_slots[c.exercise] += rem
+
+        total_remaining = sum(ex_slots.values())
+        upper = total_remaining // K_MIN
+
+        sorted_vals = sorted(ex_slots.values(), reverse=True)
+        minority_bound = sum(sorted_vals[1:]) if len(sorted_vals) >= 2 else 0
+        max_v = min(upper, minority_bound)
+
+        # current usage distribution
+        used_clips = {cid: n for cid, n in usage_split.items() if n > 0}
+        dist: dict[int, int] = defaultdict(int)
+        for n in used_clips.values():
+            dist[n] += 1
+
+        print(f"\n--- {split.upper()}  (cap={cap}) ---")
+        print(f"  Pool clips:       {len(split_pool)}")
+        print(f"  Clips used (b1):  {len(used_clips)}")
+        print(f"  Usage dist:       {dict(sorted(dist.items()))}")
+        print(f"  Clips w/ remain:  {len(remaining)}")
+        print(f"  Remaining slots:  {total_remaining}  by ex: {dict(ex_slots)}")
+        print(f"  Upper (// {K_MIN}):    {upper}")
+        print(f"  Minority bound:   {minority_bound}")
+        print(f"  >>> MAX ADDITIONAL VIDEOS: {max_v}")
+
+    print("\n" + "=" * 64)
+    print("No videos written (--plan-only).")
+    print("=" * 64)
 
 
 # ---------------------------------------------------------------------------
@@ -623,7 +1138,16 @@ def write_index(rows: list[dict], path: Path) -> None:
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p = argparse.ArgumentParser(description="Concatenate RepCount clips into synthetic videos.")
-    p.add_argument("--splits-file", default="data/manifests/splits.csv")
+    p.add_argument("--splits-file", default="data/manifests/splits_v2.csv")
+    p.add_argument("--folds-file", default="data/manifests/folds.csv", help="Source-clip folds for the v2 planner")
+    p.add_argument("--run-id", default="v2", help="Isolated run identifier (v2 planning only)")
+    p.add_argument("--test-cap", type=int, default=1, help="Test uses per clip (v2 planning)")
+    p.add_argument("--n-train-per-fold", type=int, default=None,
+                   help="Plan this many videos per fold with seeded uniform K=3..5")
+    p.add_argument("--redraw-candidates", type=int, default=0,
+                   help="Compare this many new stratified fold seeds by margin balance only")
+    p.add_argument("--validate-only", action="store_true", help="Validate the rendered v2 run without rendering")
+    p.add_argument("--max-videos", type=int, default=None, help="Stop after this many newly rendered v2 videos; rerun to resume")
     p.add_argument("--boundaries-file", default="data/manifests/repcount_rep_boundaries.json")
     p.add_argument("--exclusions-file", default="data/manifests/manual_exclusions.csv")
     p.add_argument("--n-train", type=int, default=24)
@@ -633,6 +1157,15 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
     p.add_argument("--out",     default="data/synthetic")
     p.add_argument("--pilot",   action="store_true",
                    help="Generate 1 video per split then stop")
+    p.add_argument("--plan-only", action="store_true",
+                   help="Compute max additional videos per split under "
+                        "cumulative caps; print plan and exit (no rendering)")
+    p.add_argument("--append", action="store_true",
+                   help="Append mode: read existing synthetic_index.csv for "
+                        "cumulative clip usage, start video numbering after "
+                        "existing, and append new rows to the index")
+    p.add_argument("--batch-id", type=int, default=2,
+                   help="Batch number for append mode (default 2)")
     p.add_argument("--margin-label", choices=["transition", "exercise"],
                    default="transition")
     return p.parse_args(argv)
@@ -641,10 +1174,35 @@ def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
 def main(argv: list[str] | None = None) -> None:
     args = parse_args(argv)
 
+    if args.folds_file or args.run_id:
+        if not (args.folds_file and args.run_id):
+            raise SystemExit("Fold-aware runs require --folds-file and --run-id")
+        if args.append or args.margin_label != "transition" or args.test_cap < 1:
+            raise SystemExit("v2 planning requires a fresh run, transition margins and positive --test-cap")
+        if not args.plan_only:
+            if args.n_train_per_fold is None or args.n_train_per_fold < 1:
+                raise SystemExit("v2 generation requires positive --n-train-per-fold")
+            from generate_v2 import run_v2
+            run_v2(args)
+            return
+        from plan_folds import report_fold_plan
+        if args.n_train_per_fold is not None:
+            if args.n_train_per_fold < 1 or args.redraw_candidates < 0:
+                raise SystemExit("Positive train target and nonnegative redraw candidate count required")
+            from plan_targets import report_target_plan
+            report_target_plan(args)
+            return
+        report_fold_plan(args)
+        return
+
     splits_path = Path(args.splits_file)
     boundaries_path = Path(args.boundaries_file)
     exclusions_path = Path(args.exclusions_file)
     out_base = Path(args.out)
+
+    index_path   = Path("data/manifests/synthetic_index.csv")
+    usage_path   = Path("data/manifests/clip_usage.csv")
+    manifest_path = Path("data/manifests/batch_manifest.csv")
 
     with open(boundaries_path) as fh:
         boundaries = json.load(fh)
@@ -656,24 +1214,89 @@ def main(argv: list[str] | None = None) -> None:
     df = pd.read_csv(splits_path)
     orig_map = dict(zip(df["clip_id"], df["original_split"]))
 
+    if args.plan_only:
+        run_plan_only(pool, index_path)
+        return
+
     counts = {
         "train": args.n_train,
         "val":   args.n_val,
         "test":  args.n_test,
     }
 
-    index_rows = run_batch(
-        pool=pool,
-        counts=counts,
-        out_base=out_base,
-        splits_file=args.splits_file,
-        margin_label=args.margin_label,
-        seed=args.seed,
-        pilot=args.pilot,
-        orig_map=orig_map,
-    )
+    if args.append:
+        # ---- Append mode (batch 2+) ----
+        checkpoint_path = Path("data/manifests/batch_checkpoint.json")
+        cumulative_usage = init_clip_usage(index_path, usage_path)
+        init_batch_manifest(index_path, manifest_path)
 
-    write_index(index_rows, Path("data/manifests/synthetic_index.csv"))
+        # Ensure existing index has a batch column
+        if index_path.exists():
+            idx_df = pd.read_csv(index_path)
+            if "batch" not in idx_df.columns:
+                idx_df["batch"] = 1
+                idx_df.to_csv(index_path, index=False)
+                log.info("Added batch column to existing index (all = 1)")
+
+        # Compute start counters from index (unless resuming from checkpoint)
+        ckpt = load_checkpoint(checkpoint_path)
+        if (ckpt is not None
+                and ckpt["batch_id"] == args.batch_id
+                and ckpt["seed"] == args.seed):
+            start_counters = ckpt["video_counters"]
+            log.info("Resuming from checkpoint — start_counters: %s", start_counters)
+        else:
+            start_counters: dict[str, int] = {}
+            if index_path.exists():
+                idx_df = pd.read_csv(index_path)
+                for split in ["train", "val", "test"]:
+                    split_rows = idx_df[idx_df["split"] == split]
+                    if len(split_rows) > 0:
+                        nums = split_rows["video_id"].str.extract(r"synth_\w+_(\d+)")[0]
+                        start_counters[split] = int(nums.astype(int).max())
+                    else:
+                        start_counters[split] = 0
+            else:
+                start_counters = {s: 0 for s in ["train", "val", "test"]}
+
+        log.info("Start counters: %s", start_counters)
+        log.info("Batch ID: %d, seed: %d", args.batch_id, args.seed)
+
+        index_rows = run_batch(
+            pool=pool,
+            counts=counts,
+            out_base=out_base,
+            splits_file=args.splits_file,
+            margin_label=args.margin_label,
+            seed=args.seed,
+            pilot=args.pilot,
+            orig_map=orig_map,
+            append=True,
+            batch_id=args.batch_id,
+            cumulative_usage=cumulative_usage,
+            start_counters=start_counters,
+            checkpoint_path=checkpoint_path,
+            index_path=index_path,
+            usage_path=usage_path,
+            manifest_path=manifest_path,
+        )
+
+        # Index, clip_usage and batch_manifest are updated incrementally
+        # inside run_batch — no bulk post-run writes needed.
+    else:
+        # ---- Batch-1 mode (original) ----
+        index_rows = run_batch(
+            pool=pool,
+            counts=counts,
+            out_base=out_base,
+            splits_file=args.splits_file,
+            margin_label=args.margin_label,
+            seed=args.seed,
+            pilot=args.pilot,
+            orig_map=orig_map,
+        )
+
+        write_index(index_rows, index_path)
 
     # Summary
     log.info("\n=== SUMMARY ===")

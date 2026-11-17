@@ -4,7 +4,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-POSE_DIR = Path("data/features/repcount/pose")
+POSE_DIR = Path("data/features/v2/native_pose_deferred")
 FILES = [
     "test2340.parquet",
     "stu6_18.parquet",
@@ -69,6 +69,7 @@ def validate_pose_file(path: Path) -> None:
 
 
 def main() -> None:
+    raise RuntimeError("Native pose pilot cache is deferred; validate the active v2 per-video features instead")
     for filename in FILES:
         path = POSE_DIR / filename
         if not path.exists():

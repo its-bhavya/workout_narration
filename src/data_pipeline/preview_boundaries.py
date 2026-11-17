@@ -8,8 +8,8 @@ Render an annotated preview MP4 for a synthetic video, overlaying:
 
 Usage
 -----
-    python src/data_pipeline/preview_boundaries.py --video-id synth_train_0001
-    python src/data_pipeline/preview_boundaries.py --video-id synth_val_0001 \\
+    python src/data_pipeline/preview_boundaries.py --video-id synth_v2_train_f0_0001
+    python src/data_pipeline/preview_boundaries.py --video-id synth_v2_train_f1_0001 \\
         --synthetic-dir data/synthetic --out outputs/previews
 
 Run from repo root.
@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 from pathlib import Path
+from v2_protocol import catalog, load_json, feature_frame
 
 import cv2
 import numpy as np
@@ -107,8 +108,7 @@ def main() -> None:
     if not mp4_path.exists():
         raise FileNotFoundError(f"Video not found: {mp4_path}")
 
-    with open(json_path) as fh:
-        meta = json.load(fh)
+    meta = load_json(json_path)
 
     segments  = meta["segments"]
     n_frames  = meta["n_frames"]

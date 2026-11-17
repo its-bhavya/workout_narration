@@ -21,6 +21,7 @@ EXERCISES = {
         "side": "best",            # use the more visible side
         "pattern": "down_up",      # starts high, dips, returns high
         "thresholds": (150, 168),  # (down_thresh, up_thresh)
+        "confirm_s": 0.15,
         "mode": "fixed",           # fixed beat adaptive on 10 train clips (MAE 2.3 vs 3.1)
         "min_gap": 0.5,            # seconds between counted reps
     },
@@ -30,6 +31,7 @@ EXERCISES = {
         "side": "best",
         "pattern": "down_up",
         "thresholds": (135, 148),  # only used if mode == "fixed"
+        "confirm_s": 0.10,
         "mode": "adaptive",        # camera angle changes the elbow range a lot
         "fracs": (0.35, 0.65),
         "min_gap": 0.5,
@@ -40,6 +42,7 @@ EXERCISES = {
         "side": "mean",            # front view: average both arms
         "pattern": "low_high_low",  # starts low, rises, returns low
         "thresholds": (60, 120),   # (low_thresh, high_thresh), used if mode == "fixed"
+        "confirm_s": 0.15,
         "mode": "adaptive",
         "fracs": (0.35, 0.65),
         "min_gap": 0.5,

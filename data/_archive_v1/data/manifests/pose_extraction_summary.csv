@@ -30,3 +30,15 @@ synth_train_0001,train,3598,0.9983324068927182,57.34,5,22,0.0,0.0,False,,,False,
 synth_val_0001,val,3358,0.963073257891602,57.18,3,6,0.1412,0.133,False,,,False,0.0035,0.067,False,0.0829,0.1,False,success,1679.0,2.0
 synth_test_0001,test,3899,0.9753846153846154,59.62,5,34,,,False,,,False,0.0781,1.633,True,0.0633,1.033,True,success,1950.0,2.0
 synth_test_0003,test,4948,0.959983831851253,71.81,5,1,0.0362,0.433,False,,,False,0.4436,0.267,False,0.6767,0.6,False,success,2474.0,2.0
+synth_test_0004,test,1500,0.9613333333333334,32.16,3,4,0.1223,0.433,False,,,False,,,False,,,False,success,750.0,2.0
+synth_test_0005,test,3808,1.0,106.37,3,1,,,False,,,False,0.0507,0.1,False,0.0,0.0,False,success,1904.0,2.0
+synth_test_0006,test,4469,0.9888143176733781,128.49,4,2,0.0,0.0,False,,,False,0.0042,0.1,False,0.0,0.0,False,success,2235.0,2.0
+synth_test_0007,test,5967,0.9909517426273459,225.55,5,7,0.0,0.0,False,,,False,0.031,0.133,False,0.0542,0.8,False,success,2984.0,2.0
+synth_test_0008,test,3870,0.931266149870801,129.23,4,3,0.1524,0.433,False,,,False,,,False,,,False,success,1935.0,2.0
+synth_test_0009,test,3570,1.0,212.48,3,0,0.0048,0.067,False,,,False,0.0182,0.067,False,0.3964,5.6,True,success,1785.0,2.0
+synth_test_0010,test,5518,0.9963754983689742,417.48,4,7,0.0113,0.067,False,,,False,0.0,0.0,False,0.0,0.0,False,success,2759.0,2.0
+synth_test_0011,test,4860,0.9810699588477366,393.03,3,3,,,False,,,False,0.0026,0.033,False,0.0,0.0,False,success,2430.0,2.0
+synth_test_0012,test,6084,0.9799474030243261,387.07,5,1,0.1171,0.3,False,,,False,0.2065,0.333,False,0.004,0.1,False,success,3042.0,2.0
+synth_test_0013,test,3600,0.9266666666666666,259.12,5,12,0.5278,0.467,False,,,False,0.1149,0.167,False,0.0754,0.167,False,success,1800.0,2.0
+synth_test_0014,test,4048,0.9960474308300395,124.08,4,5,0.0,0.0,False,,,False,0.0351,0.033,False,1.0,20.9,True,success,2024.0,2.0
+synth_test_0015,test,4676,0.9961505560307955,139.59,5,6,0.0,0.0,False,,,False,0.047,0.067,False,0.0,0.0,False,success,2338.0,2.0

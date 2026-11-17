@@ -56,6 +56,7 @@ STU_RE = re.compile(r"^(stu\d+)_", re.IGNORECASE)
 # ---------------------------------------------------------------------
 
 def group_key(row: pd.Series) -> str:
+    raise RuntimeError("Contributor grouping is deprecated: stu prefixes are not subjects")
     filename = row["clip_id"]
 
     match = STU_RE.match(filename)
@@ -70,6 +71,7 @@ def group_key(row: pd.Series) -> str:
 # ---------------------------------------------------------------------
 
 def assign_groups(df: pd.DataFrame) -> dict[str, str]:
+    raise RuntimeError("Contributor grouping is deprecated: stu prefixes are not subjects")
     """
     Greedy assignment of whole groups to splits, minimising the squared
     deviation of every (split, exercise) count from its target.
@@ -160,6 +162,7 @@ def report(df: pd.DataFrame) -> None:
 # ---------------------------------------------------------------------
 
 def main() -> None:
+    raise RuntimeError("Contributor-grouped/v1 workflow retired; use build_splits_v2.py and the fold-aware v2 planner")
     df = pd.read_csv(QUALITY_SCREENING_PATH)
 
     # RepCount-only splits (O1: Countix dropped)

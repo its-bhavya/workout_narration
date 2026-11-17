@@ -1,94 +1,52 @@
-# data/
+# V2 data protocol and artifacts
 
-- `raw/`       — untouched source clips from RepCount. GITIGNORED — lives on shared Google Drive.
-- `manifests/` — small CSVs, source of truth, tracked in git.
-- `synthetic/` — generated multi-exercise videos + ground-truth boundary JSONs. GITIGNORED — shared Drive.
-- `features/`  — extracted pose keypoints and joint-angle time series. Tracked in git.
+Current training/evaluation and integration guide: [V2_TRAINING.md](../docs/V2_TRAINING.md).
 
-Shared Drive folder link: TODO — add link here once created
+## Data preparation and v2 protocol
 
-## Manifests
+Active protocol and provenance: [PROJECT_CONTEXT](../docs/PROJECT_CONTEXT.md).
 
-| File | Description |
-|------|-------------|
-| `repcount_filtered.csv`       | Usable RepCount clips after annotation validation; includes `rep_boundaries` as `[[start, end], ...]` pairs parsed from raw L-columns |
-| `repcount_excluded.csv`       | Excluded clips with rejection reasons |
-| `repcount_quality.csv`        | Raw MediaPipe quality metrics per video |
-| `quality_screening.csv`       | Pass/fail/review status after threshold application |
-| `splits.csv`                  | Leakage-safe train/val/test split assignments (RepCount only, seed 42) |
-| `repcount_rep_boundaries.json`| `filename → {pairs: [[start,end],...], rep_count, total_frames, fps}` for every clip in splits.csv; 0 count mismatches, 0 out-of-bounds |
-| `synthetic_index.csv`         | One row per synthetic video: video_id, split, n_segments, duration_s, exercises, source_clips, transition_frame_share, direct_cuts, seed |
+RepCount only, pass/review, fps >=20: train is original train (239 clips);
+test is original val+test (94 clips). Countix is excluded. Contributor prefixes
+are not subjects. There is no separate validation split.
 
-## RepCount category normalization (6 October 2026)
+Five train source-clip folds use stratified seed 3969, selected on total margin
+balance only. Construction uses seed 42: 24 videos/fold, K=3..5, train cap 5,
+test cap 1, 21 test videos. Exercise slots stay within +/-10%; clips never
+repeat within a video. Train reuse spread is <=1 per exercise/fold.
 
-Raw annotation labels were normalized to three canonical exercise names:
+Phase 4 uses per-video features in data/features/v2/ and existing window code
+in outputs/segmentation_v2/. Run-ID guards reject missing/non-v2 provenance and
+archived data. V1 data is frozen in data/_archive_v1/. Native clip caches are
+deferred; separate-val workflows are retired; source-clip CV training/evaluation is now available.
 
-- `squat`: squat, squant
-- `push_up`: push_up, pushups
-- `jump_jack`: jump_jack, jumpjacks
+From the repository root, resume the entire preparation workflow:
 
-The `squant` label was manually verified on a sample of 10 videos and confirmed to be the squat exercise.
+```powershell
+uv run --no-sync python -B src/data_pipeline/phase4.py
+```
 
-After normalization and annotation validation, 375 videos matched the target exercise classes. Two were excluded (one atypical push-up variation, one incomplete squat), leaving 373 usable videos.
+This extracts train and test at stride 2 with one worker, without --force;
+then rebuilds summary/long-gap diagnostics, reports boundary ratios, builds
+windows and reports counts before/after training purity 0.8. Test counts stay
+unfiltered. `src/segmentation/cv.py:get_cv_split` supplies training folds !=k
+and validation fold k, asserting zero source-clip overlap. No models are trained
+or evaluated. Test is extraction and counting only.
 
-## Splits (26 October 2026, seed 42, RepCount only)
+To rerun only reports/windows after extraction is complete:
 
-Countix dropped (decision O1). `build_splits.py` filters to `source == "repcount"` before splitting. 336 clips pass quality screening (pass + review).
+```powershell
+uv run --no-sync python -B src/data_pipeline/phase4.py --postprocess-only
+```
 
-| split | jump_jack | push_up | squat | total | independent groups |
-|-------|-----------|---------|-------|-------|--------------------|
-| train | 68        | 72      | 76    | 216   | 31                 |
-| val   | 11        | 14      | 12    | 37    | 8                  |
-| test  | 26        | 28      | 29    | 83    | 27                 |
+Historical documentation is retained under docs/history/ and is not an active
+workflow. See docs/V2_GENERATION.md for rendering/resume details.
 
-Target fractions 65/10/25 achieved within ~1%. Leakage check passes (no group spans two splits).
+## Model workflow handoff
 
-## Video statistics (splits.csv clips)
-
-- FPS: 70% at 30 fps, 15% at 24 fps, 11% at 25 fps; 12 outliers (13.9–29.9 fps).
-- Resolution: 68% are 640×360; next largest are 1280×720 (9%) and 202×360 (7%).
-- Portrait clips (height > width): 46 / 336 (14%).
-- Frames before L1 (pre-exercise lead-in):
-
-  | exercise  | median | min | max  |
-  |-----------|--------|-----|------|
-  | jump_jack | 19     | 0   | 375  |
-  | push_up   | 28     | 0   | 1056 |
-  | squat     | 33     | 0   | 493  |
-
-  Large max values mean some clips contain usable idle footage before the first rep (relevant to O3).
-
-## Idle availability (frames outside rep boundaries)
-
-Frames before first rep start and after last rep end, across splits.csv clips:
-
-| exercise | pre p10 | pre p25 | pre p50 | pre p75 | pre p90 | pre ≥30f | post p10 | post p25 | post p50 | post p75 | post p90 | post ≥30f |
-|----------|---------|---------|---------|---------|---------|----------|----------|----------|----------|----------|----------|-----------|
-| jump_jack | 0 | 4 | 19 | 45 | 70 | 43/105 | 2 | 6 | 13 | 24 | 68 | 19/105 |
-| push_up   | 0 | 4 | 27 | 120 | 299 | 55/114 | 0 | 9 | 34 | 84 | 179 | 62/114 |
-| squat     | 2 | 6 | 33 | 118 | 214 | 60/117 | 0 | 11 | 37 | 72 | 138 | 70/117 |
-
-Jump_jack post-tail is thin (median 13 frames). Pre-activity lead-in is more consistently available across all exercises. Viable idle pool for O3: 43–60 clips pre, 19–70 clips post per exercise.
-
-## Synthetic videos (Phase 1, 26 October 2026)
-
-Generated by `concatenate_videos.py`. Whole RepCount clips concatenated back-to-back — no gaps, no padding, no idle footage inserted. Pool: splits.csv status in {pass, review}, fps ≥ 20 (3 clips excluded for low fps).
-
-Label rules (`--margin-label transition`, default):
-- `[0, first_start)` → transition
-- `[first_start, last_end + 1)` → exercise
-- `[last_end + 1, clip_end)` → transition
-- Adjacent transition spans across clip boundaries merge into one segment; zero-length segments are dropped.
-- `end_frame` is exclusive; segments are contiguous and cover `[0, n_frames)`.
-
-Video spec: 640×360, 30 fps, letterboxed, nearest-frame resampling, mp4v codec, no audio.
-
-Pilot run (seed 42, 1 video per split):
-
-| video_id | split | clips | n_frames | duration | n_segments | trans_share | direct_cuts |
-|---|---|---|---|---|---|---|---|
-| synth_train_0001 | train | 5 | 3598 | 119.9 s | 11 | 15.8% | 0 |
-| synth_val_0001   | val   | 3 | 3268 | 108.9 s | 7  | 4.7%  | 1 |
-| synth_test_0001  | test  | 3 | 1800 | 60.0 s  | 7  | 49.2% | 1 |
-
-Direct cuts (join frame lands inside an exercise segment) occur when a source clip has zero pre-margin frames. This is expected and tracked in `clip_join_frames` and `direct_cuts` in the JSON/index.
+Train-only CV selects the classifier, purity and smoothing. A separate explicit
+refit creates the all-train bundle; final test is a separate explicit command.
+Prediction and narration use that same bundle and exact n_frames/fps duration.
+Ground-truth comparison is opt-in. Dataset run_id=v2 and experiment_id remain
+distinct, with input hashes and feature-schema checks. Model compatibility was
+verified on synthetic unit-test fixtures; this is not a new benchmark result.

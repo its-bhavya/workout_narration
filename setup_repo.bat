@@ -1,4 +1,9 @@
 @echo off
+echo Scaffold retired: use the existing uv project and docs/PROJECT_CONTEXT.md.
+exit /b 1
+
+REM Historical scaffold below is intentionally unreachable.
+@echo off
 setlocal
 
 REM ==== Init git ====

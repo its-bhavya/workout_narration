@@ -48,6 +48,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
+from v2_protocol import catalog, load_json, feature_frame
 
 import numpy as np
 import pandas as pd
@@ -55,9 +56,9 @@ import pandas as pd
 from pose_utils import angle_vector_jump
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-FEATURES_DIR = PROJECT_ROOT / "data" / "features"
+FEATURES_DIR = PROJECT_ROOT / "data" / "features" / "v2"
 SYNTH_DIR = PROJECT_ROOT / "data" / "synthetic"
-OUTPUT_PATH = PROJECT_ROOT / "data" / "manifests" / "boundary_jump_check.csv"
+OUTPUT_PATH = PROJECT_ROOT / "outputs" / "segmentation_v2" / "boundary_jump_check.csv"
 
 ANGLE_COLS = [
     "knee_best", "elbow_best",
@@ -82,7 +83,7 @@ def _load_video_data(video_id: str, features_dir: Path) -> pd.DataFrame | None:
     if not csv_path.exists():
         log.warning("Missing angles CSV for %s", video_id)
         return None
-    df = pd.read_csv(csv_path)
+    df = feature_frame(csv_path)
     # Ensure required columns exist
     missing = [c for c in ANGLE_COLS if c not in df.columns]
     if missing:
@@ -140,7 +141,21 @@ def _compute_jumps(df: pd.DataFrame) -> pd.Series:
     for t in range(1, n):
         jumps[t] = angle_vector_jump(vals[t - 1], vals[t], min_components=3)
 
-    return pd.Series(jumps, index=df.index, name="jump")
+    return pd.Series(jumps, index=df["frame"].to_numpy(dtype=int), name="jump")
+
+
+def _sampled_boundary_frames(boundaries, sampled_frames):
+    """Use the sampled jump interval that straddles each exact boundary.
+
+    With stride 2 an odd boundary lies between two samples: its jump belongs
+    to the following sampled frame. Deduplicate boundaries sharing an interval.
+    """
+    result=set()
+    for frame in boundaries:
+        row=int(np.searchsorted(sampled_frames,frame,side='left'))
+        if 0 < row < len(sampled_frames) and sampled_frames[row-1] < frame <= sampled_frames[row]:
+            result.add(int(sampled_frames[row]))
+    return sorted(result)
 
 
 def _near_boundary(frame: int, boundary_set: set[int], radius: int = 2) -> bool:
@@ -160,6 +175,7 @@ def run_check(
 
     Returns the summary DataFrame.
     """
+    catalog(synth_dir)
     rng = np.random.default_rng(SEED)
 
     # Collect all (video_id, split, meta, df) tuples
@@ -169,8 +185,7 @@ def run_check(
     motion_rows: list[dict] = []
 
     for json_path in sorted(synth_dir.rglob("*.json")):
-        with open(json_path) as f:
-            meta = json.load(f)
+        meta = load_json(json_path)
 
         video_id = meta["video_id"]
         split = meta.get("split", "unknown")
@@ -182,7 +197,10 @@ def run_check(
         if df is None:
             continue
 
+        df=df.sort_values("frame").reset_index(drop=True)
+        assert df.frame.is_unique
         jumps = _compute_jumps(df)
+        sampled_frames=df["frame"].to_numpy(dtype=int)
         boundary_set = _segment_boundaries(segments)
 
         # ----------------------------------------------------------------
@@ -195,7 +213,7 @@ def run_check(
         all_boundary_frames = boundary_set | clip_join_set
 
         # (b) clip_join frames
-        clip_join_frames_list = sorted(clip_join_set)
+        clip_join_frames_list = _sampled_boundary_frames(clip_join_set,sampled_frames)
 
         # (c) random frames inside exercise segments
         #     excluding ±2 around all boundaries
@@ -204,7 +222,7 @@ def run_check(
             f for f in ex_frames
             if not _near_boundary(f, all_boundary_frames, 2)
             and f > 0  # need t-1
-            and not np.isnan(jumps.iloc[f])
+            and f in jumps.index and not np.isnan(jumps.loc[f])
         ]
 
         n_target_random = RANDOM_MULTIPLIER * len(all_boundary_frames)
@@ -215,10 +233,10 @@ def run_check(
             random_frames = []
 
         def _j(frames):
-            return [jumps.iloc[f] for f in frames
-                    if 0 < f < len(jumps) and not np.isnan(jumps.iloc[f])]
+            return [jumps.loc[f] for f in frames
+                    if f > 0 and f in jumps.index and not np.isnan(jumps.loc[f])]
 
-        boundary_jumps = _j(sorted(all_boundary_frames))
+        boundary_jumps = _j(_sampled_boundary_frames(all_boundary_frames,sampled_frames))
         clipjoin_jumps = _j(clip_join_frames_list)
         random_jumps = _j(random_frames)
 
@@ -244,10 +262,7 @@ def run_check(
         # ----------------------------------------------------------------
         for seg in segments:
             seg_frames = list(range(seg["start_frame"], seg["end_frame"]))
-            seg_jumps_vals = [
-                jumps.iloc[f] for f in seg_frames
-                if 0 < f < len(jumps) and not np.isnan(jumps.iloc[f])
-            ]
+            seg_jumps_vals = _j(seg_frames)
             if not seg_jumps_vals:
                 continue
 
@@ -269,7 +284,7 @@ def run_check(
 
     if not records:
         log.warning("No data collected – are angles CSVs present?")
-        return pd.DataFrame()
+        return pd.DataFrame(columns=['split','ratio_boundary_vs_random','ratio_clipjoin_vs_random']), pd.DataFrame()
 
     rec_df = pd.DataFrame(records)
 

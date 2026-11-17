@@ -1,0 +1,10 @@
+# Keep reproducible split/fold manifests byte-stable on Windows checkouts.
+data/manifests/splits_v2.csv -text
+data/manifests/folds.csv -text
+data/manifests/folds_seed42_archived.csv -text
+
+# Preserve archived artifacts without automatic newline rewriting.
+data/_archive_v1/** -text whitespace=cr-at-eol
+
+# Result snapshots carry recorded hashes; preserve their original bytes.
+docs/results/** -text whitespace=cr-at-eol

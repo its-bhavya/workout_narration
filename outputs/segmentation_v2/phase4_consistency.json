@@ -1,0 +1,37 @@
+{
+  "run_id": "v2",
+  "videos": 141,
+  "feature_files": 141,
+  "windows": 17607,
+  "cv_counts": [
+    {
+      "fold": 0,
+      "train_windows": 11662,
+      "validation_windows": 2574
+    },
+    {
+      "fold": 1,
+      "train_windows": 10744,
+      "validation_windows": 3503
+    },
+    {
+      "fold": 2,
+      "train_windows": 11437,
+      "validation_windows": 2782
+    },
+    {
+      "fold": 3,
+      "train_windows": 11510,
+      "validation_windows": 2721
+    },
+    {
+      "fold": 4,
+      "train_windows": 10939,
+      "validation_windows": 3299
+    }
+  ],
+  "archive_fingerprint": "ef74c6078396808ef0d2363a6c05e24c452074be6b47590648fb8ab405f32bca",
+  "model_training": false,
+  "model_evaluation": false,
+  "status": "complete"
+}

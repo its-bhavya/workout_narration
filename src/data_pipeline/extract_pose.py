@@ -236,6 +236,7 @@ def extract_video(
 
 
 def main():
+    raise RuntimeError("Native per-clip pilot workflow deferred; Phase 4 uses per-video v2 features only")
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--video-root",

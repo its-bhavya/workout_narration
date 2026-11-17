@@ -1,7 +1,7 @@
 """
 verify_l_columns.py
 
-For 6 random clips (2 per exercise) from splits.csv, save a contact-sheet
+For 6 random clips (2 per exercise) from splits_v2.csv, save a contact-sheet
 PNG of the frames at each L-value (rep boundary frame) to outputs/l_check/.
 
 The frame number is printed on each thumbnail so the viewer can judge
@@ -31,7 +31,7 @@ import pandas as pd
 REPCOUNT_ROOT = Path(r"C:\Users\Bhavya\Downloads\RepCountA (1)\LLSP")
 VIDEO_DIR = REPCOUNT_ROOT / "video"
 
-SPLITS_CSV = Path("data/manifests/splits.csv")
+SPLITS_CSV = Path("data/manifests/splits_v2.csv")
 FILTERED_CSV = Path("data/manifests/repcount_filtered.csv")
 BOUNDARIES_JSON = Path("data/manifests/repcount_rep_boundaries.json")
 
@@ -55,7 +55,7 @@ log = logging.getLogger(__name__)
 
 def find_video(filename: str, original_split: str) -> Path | None:
     """Try to locate the video file. RepCount uses train/valid/test folders."""
-    candidates = [original_split, "train", "valid", "test"]
+    candidates = ["valid" if original_split == "val" else original_split, "train", "valid", "test"]
     for split in candidates:
         p = VIDEO_DIR / split / filename
         if p.exists():
@@ -118,7 +118,7 @@ def main() -> None:
     orig_split_map = dict(
         zip(filtered["filename"], filtered["split"])
     )
-    # Also pull from splits.csv original_split
+    # Also pull from splits_v2.csv original_split
     for _, row in splits.iterrows():
         orig_split_map.setdefault(row["clip_id"], row["original_split"])
 

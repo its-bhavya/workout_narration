@@ -1,0 +1,7 @@
+{
+  "run_id": "v2",
+  "experiment_id": "cv8_v2_seed42_p080_20261117",
+  "model_sha256": "989cf80af9e7642c9c6593f53e43c64be64a87ea4cd9bce9416fbb1f807c3e7b",
+  "tau": 0.5,
+  "min_len": 3
+}
