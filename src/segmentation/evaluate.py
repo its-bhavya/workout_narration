@@ -55,13 +55,16 @@ MIN_LEN_GRID = [1, 2, 3, 4]
 # ---------------------------------------------------------------------------
 
 def _load_json(path: Path) -> dict:
-    with open(path, encoding="utf-8") as fh:
-        return json.load(fh)
+    from v2_protocol import load_json
+    return load_json(path)
 
 
 def _load_predictions(pred_csv: Path, split: str) -> dict[str, pd.DataFrame]:
     """Return {video_id: per-window DataFrame} for the given split."""
-    df = pd.read_csv(pred_csv)
+    from v2_protocol import active_path
+    df = pd.read_csv(active_path(pred_csv))
+    if "run_id" not in df or not df.run_id.eq("v2").all():
+        raise ValueError("Prediction run_id != v2")
     df = df[df["split"] == split].copy()
     return {vid: grp.sort_values("win_idx").reset_index(drop=True)
             for vid, grp in df.groupby("video_id")}
@@ -101,12 +104,9 @@ def _smoothed_segments(wdf: pd.DataFrame, video_end_s: float,
 
 
 def _find_json(video_id: str) -> Path:
-    """Locate the synthetic JSON for a video_id under SYNTH_DIR."""
-    split = video_id.split("_")[1]  # synth_val_0001 -> val
-    p = SYNTH_DIR / split / f"{video_id}.json"
-    if not p.exists():
-        raise FileNotFoundError(f"Cannot find JSON for {video_id}: {p}")
-    return p
+    from v2_protocol import catalog
+    meta = catalog()[video_id]
+    return SYNTH_DIR / meta["split"] / f"{video_id}.json"
 
 
 def _eval_video(wdf: pd.DataFrame, meta: dict, tau: float, min_len: int) -> tuple[dict, dict]:
@@ -119,20 +119,8 @@ def _eval_video(wdf: pd.DataFrame, meta: dict, tau: float, min_len: int) -> tupl
     return rm, sm
 
 
-def _subject_prefixes(clip_ids: list[str]) -> set[str]:
-    """Extract stuN or other prefix from clip filenames."""
-    prefixes: set[str] = set()
-    for clip in clip_ids:
-        clip = clip.replace(".mp4", "")
-        m = re.match(r"^(stu\d+|train|val|test)_?\d*", clip)
-        if m:
-            # For stuN, keep stuN; for train/val/test IDs keep the word
-            word = re.match(r"^(stu\d+|[a-z]+)", clip)
-            if word:
-                prefixes.add(word.group(1))
-        else:
-            prefixes.add(clip)
-    return prefixes
+def _subject_prefixes(clip_ids):
+    raise RuntimeError("Contributor prefixes are not subjects; subject-prefix reporting is retired")
 
 
 # ---------------------------------------------------------------------------
@@ -141,6 +129,7 @@ def _subject_prefixes(clip_ids: list[str]) -> set[str]:
 
 def grid_search_val(val_preds: dict[str, pd.DataFrame],
                     synth_dir: Path) -> tuple[float, int]:
+    raise RuntimeError("Legacy model selection retired; Phase 4 permits no training/evaluation")
     """Return (best_tau, best_min_len) maximising Edit score, tie-break frame accuracy."""
     log.info("Grid-searching tau=%s x min_len=%s on %d val videos",
              TAU_GRID, MIN_LEN_GRID, len(val_preds))
@@ -210,6 +199,7 @@ def _timeline_plot(video_id: str, gt_segs: list[dict],
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    raise RuntimeError("Separate-val workflow retired. Phase 4 permits data preparation only; use cv.get_cv_split for future CV training.")
     parser = argparse.ArgumentParser(description="Evaluate segmentation on val and test.")
     parser.add_argument("--pred-val", type=Path,
                         default=OUTPUT_DIR / "window_predictions_val.csv")

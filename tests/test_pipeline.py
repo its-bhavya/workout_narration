@@ -81,26 +81,25 @@ def test_narration_cue_generation():
 
 
 def test_resolve_features_input(tmp_path: Path):
-    # Test DataFrame input
-    df = pd.DataFrame({"time_s": [0.0, 1.0, 2.0], "knee_best": [170.0, 160.0, 170.0]})
-    out_df, vid = resolve_features_input(df)
-    assert vid == "in_memory_video"
-    assert len(out_df) == 3
-
-    # Test CSV path input
+    df = pd.DataFrame({"time_s": [0.,1.,2.], "knee_best": [170.,160.,170.]})
+    with pytest.raises(ValueError, match="run_id=v2"):
+        resolve_features_input(df)
     csv_file = tmp_path / "custom_angles.csv"
-    df.to_csv(csv_file, index=False)
-    out_df2, vid2 = resolve_features_input(csv_file)
-    assert vid2 == "custom"
-    assert len(out_df2) == 3
+    df.to_csv(csv_file,index=False)
+    with pytest.raises(ValueError, match="run_id != v2"):
+        resolve_features_input(csv_file)
+    df["run_id"] = "v2"
+    out, vid = resolve_features_input(df)
+    assert vid == "in_memory_video" and len(out)==3
 
 
-def test_pipeline_on_synth_test_0001():
+@pytest.mark.skip(reason="Phase 4 permits no model inference/evaluation; no v2 model exists")
+def test_pipeline_on_synth_v2_train_f0_0001():
     pipeline = WorkoutPipeline()
-    result = pipeline.analyze("synth_test_0001", show_gt=True)
+    result = pipeline.analyze("synth_v2_train_f0_0001", show_gt=True)
 
     assert isinstance(result, WorkoutAnalysisResult)
-    assert result.video_id == "synth_test_0001"
+    assert result.video_id == "synth_v2_train_f0_0001"
     assert result.duration_s > 100.0
     assert result.summary.total_reps > 50
     assert len(result.segments) >= 5
@@ -124,17 +123,18 @@ def test_pipeline_on_synth_test_0001():
     # Verify JSON export
     j_str = result.to_json()
     parsed = json.loads(j_str)
-    assert parsed["video_id"] == "synth_test_0001"
+    assert parsed["video_id"] == "synth_v2_train_f0_0001"
     assert "summary" in parsed
     assert "segments" in parsed
     assert "narration_timeline" in parsed
 
 
+@pytest.mark.skip(reason="Phase 4 permits no model inference/evaluation; no v2 model exists")
 def test_pipeline_save_json(tmp_path: Path):
     out_file = tmp_path / "test_out.json"
-    result = analyze_workout("synth_test_0001", show_gt=False)
+    result = analyze_workout("synth_v2_train_f0_0001", show_gt=False)
     result.save_json(out_file)
     assert out_file.exists()
     content = json.loads(out_file.read_text(encoding="utf-8"))
-    assert content["video_id"] == "synth_test_0001"
+    assert content["video_id"] == "synth_v2_train_f0_0001"
     assert content["summary"]["total_reps"] > 0

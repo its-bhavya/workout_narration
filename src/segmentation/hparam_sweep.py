@@ -141,6 +141,9 @@ QUICK_CLASSIFIERS = {"rf", "lr"}
 # Feature matrix (built once, shared across all experiments)
 # ---------------------------------------------------------------------------
 
+from v2_protocol import feature_frame
+
+
 def build_feature_matrix(
     windows: pd.DataFrame,
     features_dir: Path,
@@ -158,7 +161,7 @@ def build_feature_matrix(
             path = features_dir / f"{video_id}_angles.csv"
             if not path.exists():
                 raise FileNotFoundError(f"Missing angle CSV: {path}")
-            video_cache[video_id] = fill_video_nans(pd.read_csv(path))
+            video_cache[video_id] = fill_video_nans(feature_frame(path))
         return video_cache[video_id]
 
     first_vid = str(windows.iloc[0]["video_id"])
@@ -262,6 +265,7 @@ def run_experiment(
     tau_grid: list[float],
     min_len_grid: list[int],
 ) -> dict:
+    raise RuntimeError("Legacy model selection retired; Phase 4 permits no training/evaluation")
     from sklearn.metrics import accuracy_score, f1_score
 
     y = windows["label"].astype(str)
@@ -355,6 +359,7 @@ def run_sweep(
     min_len_grid: list[int],
     seed: int,
 ) -> None:
+    raise RuntimeError("Legacy model selection retired; Phase 4 permits no training/evaluation")
     out_dir.mkdir(parents=True, exist_ok=True)
 
     all_clfs = _build_classifiers(seed)
@@ -506,6 +511,7 @@ def run_sweep(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    raise RuntimeError("Separate-val workflow retired. Phase 4 permits data preparation only; use cv.get_cv_split for future CV training.")
     all_clf_names = list(_build_classifiers(SEED).keys())
 
     parser = argparse.ArgumentParser(

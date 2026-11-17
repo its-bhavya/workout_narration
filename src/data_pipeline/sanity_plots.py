@@ -3,7 +3,7 @@ sanity_plots.py – Diagnostic angle plots for a synthetic video.
 
 Usage
 -----
-    python src/data_pipeline/sanity_plots.py --video-id synth_train_0001
+    python src/data_pipeline/sanity_plots.py --video-id synth_v2_train_f0_0001
 
 Produces a stacked subplot figure saved to outputs/<video_id>_angles.png.
 
@@ -26,6 +26,7 @@ import argparse
 import json
 import logging
 from pathlib import Path
+from v2_protocol import catalog, load_json, feature_frame
 
 import matplotlib.pyplot as plt
 import matplotlib.patches as mpatches
@@ -34,7 +35,7 @@ import pandas as pd
 from scipy.signal import find_peaks
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-FEATURES_DIR = PROJECT_ROOT / "data" / "features"
+FEATURES_DIR = PROJECT_ROOT / "data" / "features" / "v2"
 SYNTH_DIR = PROJECT_ROOT / "data" / "synthetic"
 OUTPUTS_DIR = PROJECT_ROOT / "outputs"
 
@@ -111,15 +112,14 @@ def plot_video(video_id: str, features_dir: Path, synth_dir: Path, out_dir: Path
             "Run extract_pose_features.py first."
         )
 
-    with open(json_path) as f:
-        meta = json.load(f)
+    meta = load_json(json_path)
 
     fps = float(meta["fps"])
     segments = meta["segments"]
     clip_join_frames = meta.get("clip_join_frames", [])
     split = meta.get("split", "")
 
-    df = pd.read_csv(csv_path)
+    df = feature_frame(csv_path, meta)
     time_s = df["time_s"].to_numpy(float)
 
     # Decide which angles to plot
@@ -265,7 +265,7 @@ def main() -> None:
 
     parser = argparse.ArgumentParser(description="Sanity plots for a synthetic video.")
     parser.add_argument("--video-id", required=True,
-                        help="Video ID, e.g. synth_train_0001")
+                        help="Video ID, e.g. synth_v2_train_f0_0001")
     parser.add_argument("--features-dir", type=Path, default=FEATURES_DIR)
     parser.add_argument("--synth-dir", type=Path, default=SYNTH_DIR)
     parser.add_argument("--out-dir", type=Path, default=OUTPUTS_DIR)

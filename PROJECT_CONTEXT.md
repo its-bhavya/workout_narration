@@ -1,3 +1,6 @@
+> Historical v1 context. Active protocol and commands: docs/PROJECT_CONTEXT.md.
+> Contributor-prefix subject claims and separate-val workflows below are superseded.
+
 # Project Context: Silent Workout Video to Narrated Coaching
 
 Handoff document for a new developer or an agentic IDE. Read sections 0 and 8 first.
@@ -287,7 +290,7 @@ Observation: Countix is noisier than RepCount, especially squat (about 26% quali
 - Order: random exercise sequence, a few exercises per video, with an idle gap (O3) between them. Seeded.
 - Per video, write a boundary JSON, for example:
 ```json
-{"video_id": "synth_test_0001", "split": "test", "fps": 30,
+{"video_id": "archived-v1-video-example", "split": "test", "fps": 30,
  "segments": [
    {"type": "exercise", "label": "squat", "start_s": 0.0, "end_s": 8.3,
     "source": "repcount", "clip_id": "stu3_5.mp4", "rep_count": 6,

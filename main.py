@@ -20,8 +20,8 @@ def main() -> None:
     parser.add_argument(
         "video",
         nargs="?",
-        default="synth_test_0001",
-        help="Video ID (e.g. synth_test_0001), path to MP4 video, or path to *_angles.csv. (Default: synth_test_0001)",
+        default="synth_v2_train_f0_0001",
+        help="Video ID (e.g. synth_v2_train_f0_0001), path to MP4 video, or path to *_angles.csv. (Default: synth_v2_train_f0_0001)",
     )
     parser.add_argument(
         "--export",

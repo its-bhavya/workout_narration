@@ -54,11 +54,11 @@ def _fake_csv(path: Path, duration_s: float = 10.0, dt: float = 0.1,
 
 class TestMakeWindows:
     def test_fake_10s_two_segments(self, tmp_path):
-        csv_path = tmp_path / "synth_test_9999_angles.csv"
+        csv_path = tmp_path / "synth_v2_test_9999_angles.csv"
         _fake_csv(csv_path, duration_s=10.0, dt=0.1, boundary_s=5.0)
 
         df = pd.read_csv(csv_path)
-        wins = make_windows_for_video(df, "synth_test_9999", "test")
+        wins = make_windows_for_video(df, "synth_v2_test_9999", "test")
 
         # 10 s, window 2.0 s, stride 1.0 s -> starts at 0,1,...,8 -> 9 windows.
         assert len(wins) == 9

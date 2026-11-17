@@ -1,67 +1,39 @@
-# Segmentation Pipeline — Quick Start
+# Workout narration: active v2 protocol
 
-From the repo root, build the sliding-window classifier end-to-end:
+Active protocol and provenance: [PROJECT_CONTEXT](../../docs/PROJECT_CONTEXT.md).
 
-## 1. Build window index
+RepCount only, pass/review, fps >=20: train is original train (239 clips);
+test is original val+test (94 clips). Countix is excluded. Contributor prefixes
+are not subjects. There is no separate validation split.
 
-```bash
-python src/segmentation/make_windows.py
+Five train source-clip folds use stratified seed 3969, selected on total margin
+balance only. Construction uses seed 42: 24 videos/fold, K=3..5, train cap 5,
+test cap 1, 21 test videos. Exercise slots stay within +/-10%; clips never
+repeat within a video. Train reuse spread is <=1 per exercise/fold.
+
+Phase 4 uses per-video features in data/features/v2/ and existing window code
+in outputs/segmentation_v2/. Run-ID guards reject missing/non-v2 provenance and
+archived data. V1 data is frozen in data/_archive_v1/. Native clip caches are
+deferred; no separate-val training/evaluation command is active.
+
+From the repository root, resume the entire preparation workflow:
+
+```powershell
+uv run --no-sync python -B src/data_pipeline/phase4.py
 ```
 
-Outputs: `outputs/segmentation/windows.csv` (5891 windows: 3292 train, 541 val, 2058 test).
-Prints window counts per split × class.
+This extracts train and test at stride 2 with one worker, without --force;
+then rebuilds summary/long-gap diagnostics, reports boundary ratios, builds
+windows and reports counts before/after training purity 0.8. Test counts stay
+unfiltered. `src/segmentation/cv.py:get_cv_split` supplies training folds !=k
+and validation fold k, asserting zero source-clip overlap. No models are trained
+or evaluated. Test is extraction and counting only.
 
-## 2. Train and evaluate
+To rerun only reports/windows after extraction is complete:
 
-```bash
-python src/segmentation/train.py --tag "experiment_label"
+```powershell
+uv run --no-sync python -B src/data_pipeline/phase4.py --postprocess-only
 ```
 
-Outputs:
-- `outputs/segmentation/val_window_report.txt` — latest val metrics
-- `outputs/segmentation/rf_model.joblib` — latest model bundle (feature_cols, fill_values, classes)
-- `outputs/segmentation/window_predictions_{val,test}.csv` — per-window predictions (all class probs + max)
-- `outputs/segmentation/runs/<run_id>/` — archived full snapshot (report, model, predictions, metadata)
-- `outputs/segmentation/runs_log.csv` — master log, one row per run
-
-`--tag` is optional; recorded in the log so you can compare experiments.
-
-## Current results (val)
-
-RandomForest, window 2.0 s, stride 1.0 s, train purity ≥ 0.8, 112 features.
-
-| metric | value |
-|--------|-------|
-| accuracy | 0.828 |
-| macro-F1 | 0.766 |
-
-| class | F1 |
-|-------|------|
-| jump_jack | 0.955 |
-| push_up | 0.885 |
-| squat | 0.864 |
-| transition | 0.360 |
-
-## Inspect past runs
-
-```bash
-# Compare experiments: open outputs/segmentation/runs_log.csv
-# See all runs' model params, window counts, and metrics side-by-side
-
-# Drill into a run:
-cat outputs/segmentation/runs/<run_id>/run_meta.json
-cat outputs/segmentation/runs/<run_id>/val_window_report.txt
-```
-
-## Modify hyperparameters
-
-All parameters are in `src/segmentation/config.py`: `WINDOW_S`, `STRIDE_S`,
-`MIN_PURITY_TRAIN`, `MIN_ROWS_FRAC`, `SEED`. Change any and re-run `train.py` —
-the new values are logged and every run is archived, so you have full history.
-
-## Next steps
-
-After the classifier, implement:
-- OnlineTAS-style smoothing (confidence threshold, minimum segment length)
-- Raw-vs-smoothed evaluation metrics (frame accuracy, Edit score, F1@{10, 25, 50}, boundary error)
-- Per-segment rep counting via the rep_counter from `src/rep_counting/`
+Historical documentation is retained under docs/history/ and is not an active
+workflow. See docs/V2_GENERATION.md for rendering/resume details.

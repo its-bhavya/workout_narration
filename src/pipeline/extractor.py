@@ -5,6 +5,7 @@ import json
 import logging
 from pathlib import Path
 from typing import Tuple
+from ..data_pipeline.v2_protocol import feature_frame, load_json, active_path
 
 import numpy as np
 import pandas as pd
@@ -18,7 +19,7 @@ from ..data_pipeline.pose_utils import (
 logger = logging.getLogger(__name__)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
-FEATURES_DIR = REPO_ROOT / "data" / "features"
+FEATURES_DIR = REPO_ROOT / "data" / "features" / "v2"
 SYNTH_DIR = REPO_ROOT / "data" / "synthetic"
 MODEL_PATH = REPO_ROOT / "models" / "pose_landmarker_full.task"
 
@@ -181,7 +182,9 @@ def extract_features_from_video(
     stride: int = 1,
     vis_thresh: float = 0.5,
 ) -> pd.DataFrame:
-    """Extract pose angle time series directly from an MP4 video."""
+    """Deprecated alternate extractor; use the canonical v2 resume path."""
+    load_json(Path(video_path).with_suffix(".json"))
+    raise RuntimeError("Use extract_pose_features.py for canonical v2 extraction")
     import cv2
     import mediapipe as mp
     from mediapipe.tasks import python as mp_python
@@ -282,28 +285,30 @@ def resolve_features_input(
     """Resolve an input (ID, video file, CSV, or DataFrame) into (features_df, video_id)."""
     if isinstance(video_input, pd.DataFrame):
         df = video_input.copy()
+        if "run_id" not in df or not df.run_id.eq("v2").all():
+            raise ValueError("Input features require run_id=v2")
         video_id = "in_memory_video"
         return df, video_id
 
     input_str = str(video_input).strip()
-    path_obj = Path(input_str)
+    path_obj = active_path(input_str)
 
     # 1. Direct CSV file
     if path_obj.is_file() and path_obj.suffix.lower() == ".csv":
-        df = pd.read_csv(path_obj)
+        df = feature_frame(path_obj)
         video_id = path_obj.stem.replace("_angles", "")
         return df, video_id
 
     # 2. Check if input_str is a video_id whose angles CSV exists in features_dir
     possible_csv = features_dir / f"{input_str}_angles.csv"
     if possible_csv.exists():
-        df = pd.read_csv(possible_csv)
+        df = feature_frame(possible_csv)
         return df, input_str
 
     # Also check without _angles
     possible_csv2 = features_dir / f"{input_str}.csv"
     if possible_csv2.exists():
-        df = pd.read_csv(possible_csv2)
+        df = feature_frame(possible_csv2)
         return df, input_str
 
     # 3. Direct video file
@@ -313,22 +318,26 @@ def resolve_features_input(
         cached_csv = features_dir / f"{video_id}_angles.csv"
         if cached_csv.exists():
             logger.info("Found cached angles CSV at %s", cached_csv)
-            df = pd.read_csv(cached_csv)
+            df = feature_frame(cached_csv)
             return df, video_id
 
+        meta = load_json(path_obj.with_suffix(".json"))
+        raise RuntimeError("Use the canonical resume-only v2 extractor before pipeline analysis")
         # Otherwise extract on the fly
         logger.info("Extracting pose features from %s...", path_obj)
         df = extract_features_from_video(path_obj, model_path=model_path)
         return df, video_id
 
     # 4. Check if it's a video_id inside synthetic directory
-    for split in ("test", "val", "train"):
+    for split in ("train", "test"):
         candidate_mp4 = synth_dir / split / f"{input_str}.mp4"
         if candidate_mp4.exists():
             cached_csv = features_dir / f"{input_str}_angles.csv"
             if cached_csv.exists():
-                df = pd.read_csv(cached_csv)
+                df = feature_frame(cached_csv)
                 return df, input_str
+            load_json(candidate_mp4.with_suffix(".json"))
+            raise RuntimeError("Missing canonical v2 features; run extract_pose_features.py first")
             df = extract_features_from_video(candidate_mp4, model_path=model_path)
             return df, input_str
 
@@ -346,11 +355,11 @@ def load_ground_truth_if_available(
     synth_dir: Path = SYNTH_DIR,
 ) -> tuple[list[dict], float, dict[str, int]] | tuple[None, None, None]:
     """Load ground truth segments, video duration, and rep counts if companion JSON exists."""
-    for split in ("test", "val", "train"):
+    for split in ("train", "test"):
         j_path = synth_dir / split / f"{video_id}.json"
         if j_path.exists():
             with open(j_path, encoding="utf-8") as fh:
-                meta = json.load(fh)
+                meta = load_json(j_path)
             fps = float(meta.get("fps", 30))
             duration_s = float(meta.get("duration_s", 0.0))
             raw_segments = meta.get("segments", [])

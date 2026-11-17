@@ -8,7 +8,7 @@ Runs MediaPipe PoseLandmarker on synthetic videos and writes:
 Usage
 -----
     # single video
-    python src/data_pipeline/extract_pose_features.py --video data/synthetic/train/synth_train_0001.mp4
+    python src/data_pipeline/extract_pose_features.py --video data/synthetic/train/synth_v2_train_f0_0001.mp4
 
     # all videos
     python src/data_pipeline/extract_pose_features.py --all
@@ -90,10 +90,12 @@ from pose_utils import (
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODEL_PATH = PROJECT_ROOT / "models" / "pose_landmarker_full.task"
-FEATURES_DIR = PROJECT_ROOT / "data" / "features"
-SUMMARY_PATH = PROJECT_ROOT / "data" / "manifests" / "pose_extraction_summary.csv"
+FEATURES_DIR = PROJECT_ROOT / "data" / "features" / "v2"
+SUMMARY_PATH = PROJECT_ROOT / "data" / "manifests" / "pose_extraction_summary_v2.csv"
 
 SYNTH_DIR = PROJECT_ROOT / "data" / "synthetic"
+
+from v2_protocol import catalog, load_json, feature_frame, sha256, require_v2
 
 # MediaPipe landmark indices
 _SH_L, _SH_R = 11, 12
@@ -433,8 +435,7 @@ def extract_video_angles(
     t0 = time.perf_counter()
     video_id = video_path.stem
 
-    with open(json_path) as f:
-        meta = json.load(f)
+    meta = load_json(json_path)
     fps = float(meta["fps"])
     width = int(meta["width"])
     height = int(meta["height"])
@@ -783,7 +784,10 @@ def extract_video_angles(
     # Save CSV
     # -----------------------------------------------------------------------
     output_csv.parent.mkdir(parents=True, exist_ok=True)
-    df.to_csv(output_csv, index=False)
+    df["video_id"] = video_id
+    df["run_id"] = "v2"
+    df["split"] = meta["split"]
+    df["fold"] = meta["fold"]
 
     elapsed = time.perf_counter() - t0
     n_frames_total = frame_idx  # total frames in video (including skipped)
@@ -802,7 +806,9 @@ def extract_video_angles(
 
     summary_row: dict = {
         "video_id": video_id,
-        "split": meta.get("split", ""),
+        "split": meta["split"],
+        "fold": meta["fold"],
+        "run_id": "v2",
         "n_frames": n_frames_total,
         "n_frames_processed": n_frames_processed,
         "stride": stride,
@@ -812,13 +818,29 @@ def extract_video_angles(
         "subject_jump_count": int(df["subject_jump"].sum()),
     }
 
-    # Per-exercise gap stats
+    summary_row.update(exercise_gap_stats(df, meta, fps, stride))
+
+    assert n_frames_total == meta["n_frames"], "Incomplete video decode"
+    assert df["frame"].tolist() == list(range(0, meta["n_frames"], stride)), "Incomplete sampled frames"
+    temporary = output_csv.with_suffix(".csv.tmp")
+    df.to_csv(temporary, index=False)
+    temporary.replace(output_csv)
+    provenance = dict(run_id="v2", video_id=video_id, stride=stride, mode=mode,
+                      vis_thresh=vis_thresh, source_json_sha256=sha256(json_path),
+                      model_sha256=sha256(model_path), csv_sha256=sha256(output_csv),
+                      summary=summary_row)
+    sidecar = output_csv.with_suffix(".meta.json")
+    sidecar.write_text(json.dumps(provenance, indent=2), encoding="utf-8")
+    return summary_row
+
+
+def exercise_gap_stats(df, meta, fps, stride):
+    """Report NaN gaps per segment using actual sampled time spacing."""
+    exercise_angle_map = {"squat":"knee_best", "push_up":"elbow_best",
+                          "jump_jack_arm":"arm_raise_L", "jump_jack_leg":"leg_spread"}
+    stats = {}
     for ex_key, angle_col in exercise_angle_map.items():
-        ex_label = ex_key.split("_")[0] + ("_jack" if "jack" in ex_key else "")
-        if ex_key == "jump_jack_arm":
-            ex_label = "jump_jack"
-        elif ex_key == "jump_jack_leg":
-            ex_label = "jump_jack"
+        ex_label = "jump_jack" if ex_key.startswith("jump_jack_") else ex_key
 
         segs = [s for s in meta.get("segments", [])
                 if s["type"] == "exercise" and s["label"] == ex_label]
@@ -831,9 +853,9 @@ def extract_video_angles(
 
         if not vals:
             suffix = ex_key
-            summary_row[f"frac_nan_{suffix}"] = float("nan")
-            summary_row[f"longest_nan_s_{suffix}"] = float("nan")
-            summary_row[f"has_long_gap_{suffix}"] = False
+            stats[f"frac_nan_{suffix}"] = float("nan")
+            stats[f"longest_nan_s_{suffix}"] = float("nan")
+            stats[f"has_long_gap_{suffix}"] = False
             continue
 
         combined = np.concatenate(vals)
@@ -841,16 +863,18 @@ def extract_video_angles(
         n_nan = int(np.isnan(combined).sum())
         frac_nan = n_nan / n_total if n_total > 0 else float("nan")
 
-        # Longest consecutive NaN run
-        longest = _longest_nan_run(combined)
-        longest_s = longest / fps
+        # Evaluate each exercise segment independently: separated segments
+        # cannot form one continuous missing-pose gap. Use actual sample time.
+        sample_dt = float(np.median(np.diff(df["time_s"]))) if len(df)>1 else stride/fps
+        longest = max((_longest_nan_run(values) for values in vals), default=0)
+        longest_s = longest * sample_dt
 
         suffix = ex_key
-        summary_row[f"frac_nan_{suffix}"] = round(frac_nan, 4)
-        summary_row[f"longest_nan_s_{suffix}"] = round(longest_s, 3)
-        summary_row[f"has_long_gap_{suffix}"] = longest_s > 1.0
+        stats[f"frac_nan_{suffix}"] = round(frac_nan, 4)
+        stats[f"longest_nan_s_{suffix}"] = round(longest_s, 3)
+        stats[f"has_long_gap_{suffix}"] = longest_s > 1.0
 
-    return summary_row
+    return stats
 
 
 def _longest_nan_run(arr: np.ndarray) -> int:
@@ -879,14 +903,26 @@ def _worker(args: tuple) -> dict:
     """Top-level worker function (must be picklable -> module-level)."""
     video_path, json_path, output_csv, model_path, vis_thresh, mode, force, stride = args
 
-    if not force and output_csv.exists():
-        try:
-            existing = pd.read_csv(output_csv, nrows=2)
-            if len(existing) > 0:
-                log.info("SKIP %s (already exists)", output_csv.name)
-                return {"video_id": video_path.stem, "status": "skipped"}
-        except Exception:
-            pass
+    meta = load_json(json_path)
+    sidecar = output_csv.with_suffix(".meta.json")
+    if force:
+        raise ValueError("V2 extraction is resume-only; archive files explicitly instead of --force")
+    if output_csv.exists() and sidecar.exists():
+        provenance = require_v2(json.loads(sidecar.read_text()))
+        expected = dict(stride=stride, mode=mode, vis_thresh=vis_thresh,
+                        source_json_sha256=sha256(json_path), model_sha256=sha256(model_path),
+                        csv_sha256=sha256(output_csv))
+        if any(provenance.get(k) != v for k,v in expected.items()):
+            raise ValueError(f"Incompatible feature cache; archive before replacing: {output_csv}")
+        feature_frame(output_csv, meta)
+        summary = provenance["summary"].copy()
+        summary["status"] = "success"
+        log.info("SKIP %s (verified v2 resume; original elapsed=%.1fs)", output_csv.name, summary["elapsed_s"])
+        return summary
+    if output_csv.exists() or sidecar.exists():
+        from generate_v2 import archive_partial
+        archive_partial(output_csv, output_csv.parent)
+        archive_partial(sidecar, output_csv.parent)
 
     try:
         summary = extract_video_angles(
@@ -904,7 +940,7 @@ def _worker(args: tuple) -> dict:
         return summary
     except Exception as exc:
         log.exception("FAILED %s: %s", video_path.name, exc)
-        return {"video_id": video_path.stem, "status": "failed", "error": str(exc)}
+        return {"video_id": video_path.stem, "run_id": "v2", "split": meta["split"], "fold": meta["fold"], "status": "failed", "error": str(exc)}
 
 
 # ---------------------------------------------------------------------------
@@ -920,22 +956,12 @@ def _collect_videos(
     If only_splits is given, only videos whose companion JSON has a "split"
     value in that set are included.
     """
+    videos = catalog(synth_dir)
     pairs = []
-    for mp4 in sorted(synth_dir.rglob("*.mp4")):
-        j = mp4.with_suffix(".json")
-        if not j.exists():
-            log.warning("No companion JSON for %s – skipping", mp4)
-            continue
-        if only_splits is not None:
-            try:
-                with open(j) as fh:
-                    split_val = json.load(fh).get("split", "")
-                if split_val not in only_splits:
-                    continue
-            except Exception:
-                log.warning("Could not read split from %s – skipping", j)
-                continue
-        pairs.append((mp4, j))
+    for video_id, meta in sorted(videos.items()):
+        if only_splits is None or meta["split"] in only_splits:
+            mp4 = synth_dir / meta["split"] / f"{video_id}.mp4"
+            pairs.append((mp4, mp4.with_suffix(".json")))
     return pairs
 
 
@@ -972,6 +998,8 @@ def main() -> None:
                              "then exit without updating the summary CSV.")
     args = parser.parse_args()
 
+    if args.force or args.benchmark:
+        raise SystemExit("Use resume-only extraction, without --force or --benchmark")
     if args.stride < 1:
         raise SystemExit("--stride must be >= 1")
 
@@ -987,6 +1015,9 @@ def main() -> None:
         j = mp4.with_suffix(".json")
         if not j.exists():
             raise SystemExit(f"No companion JSON found: {j}")
+        meta = load_json(j)
+        if meta["video_id"] not in catalog(args.synth_dir):
+            raise ValueError("Single video is not in the active v2 index")
         pairs = [(mp4, j)]
     else:
         pairs = _collect_videos(args.synth_dir, only_splits)
@@ -1074,14 +1105,14 @@ def main() -> None:
     if new_rows:
         new_df = pd.DataFrame(new_rows)
         if SUMMARY_PATH.exists():
-            try:
-                old_df = pd.read_csv(SUMMARY_PATH)
-                # Drop rows we just re-computed
-                updated_ids = set(new_df["video_id"])
-                old_df = old_df[~old_df["video_id"].isin(updated_ids)]
-                combined = pd.concat([old_df, new_df], ignore_index=True)
-            except Exception:
-                combined = new_df
+            old_df = pd.read_csv(SUMMARY_PATH)
+            if "run_id" not in old_df or not old_df.run_id.eq("v2").all():
+                raise ValueError("Pose summary contains run_id != v2")
+            if not set(old_df.video_id) <= set(catalog(args.synth_dir)):
+                raise ValueError("Pose summary references an unknown video")
+            updated_ids = set(new_df["video_id"])
+            old_df = old_df[~old_df["video_id"].isin(updated_ids)]
+            combined = pd.concat([old_df, new_df], ignore_index=True)
         else:
             combined = new_df
 
@@ -1091,6 +1122,8 @@ def main() -> None:
 
     # Print table
     print("\n=== Extraction summary ===")
+    if any(r.get("status") == "failed" for r in results):
+        raise SystemExit("Extraction failed for one or more videos; see per-video errors")
     for r in results:
         status = r.get("status", "?")
         vid = r.get("video_id", "?")

@@ -31,6 +31,7 @@ def _run(cmd: list[str], step: str) -> None:
 
 
 def main() -> None:
+    raise RuntimeError("Separate-val workflow retired. Phase 4 permits data preparation only; use cv.get_cv_split for future CV training.")
     parser = argparse.ArgumentParser(
         description="Run make_windows -> train -> evaluate end-to-end."
     )

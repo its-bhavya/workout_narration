@@ -250,6 +250,7 @@ def extract_features(path: Path) -> pd.DataFrame:
 
 
 def main() -> None:
+    raise RuntimeError("Native per-clip pilot workflow deferred; Phase 4 uses per-video v2 features only")
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
     for filename in sorted(POSE_DIR.glob("*.parquet")):

@@ -14,10 +14,10 @@ from pathlib import Path
 # Paths (all relative to repo root)
 # ---------------------------------------------------------------------------
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-FEATURES_DIR = PROJECT_ROOT / "data" / "features"
+FEATURES_DIR = PROJECT_ROOT / "data" / "features" / "v2"
 SYNTH_DIR = PROJECT_ROOT / "data" / "synthetic"
 MANIFEST_PATH = PROJECT_ROOT / "data" / "manifests" / "synthetic_index.csv"
-OUTPUT_DIR = PROJECT_ROOT / "outputs" / "segmentation"
+OUTPUT_DIR = PROJECT_ROOT / "outputs" / "segmentation_v2"
 WINDOWS_CSV = OUTPUT_DIR / "windows.csv"
 
 # ---------------------------------------------------------------------------
@@ -78,3 +78,7 @@ def feature_columns(header) -> list[str]:
         if variant in header_set:
             cols.append(variant)
     return cols
+
+SPLITS_PATH = PROJECT_ROOT / "data" / "manifests" / "splits_v2.csv"
+FOLDS_PATH = PROJECT_ROOT / "data" / "manifests" / "folds.csv"
+RUN_ID = "v2"

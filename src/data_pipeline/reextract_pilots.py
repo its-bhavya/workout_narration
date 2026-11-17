@@ -7,23 +7,8 @@ to match the rest of the batch.  Run once then delete.
 from pathlib import Path
 import subprocess, sys
 
-PILOTS = [
-    "data/synthetic/train/synth_train_0001.mp4",
-    "data/synthetic/val/synth_val_0001.mp4",
-    "data/synthetic/test/synth_test_0001.mp4",
-]
+def main():
+    raise RuntimeError("Pilot force re-extraction retired; use extract_pose_features.py --all --stride 2 --workers 1")
 
-for p in PILOTS:
-    print(f"\n--- Re-extracting {p} ---")
-    result = subprocess.run(
-        [
-            sys.executable,
-            "src/data_pipeline/extract_pose_features.py",
-            "--video", p,
-            "--stride", "2",
-            "--force",
-        ],
-        check=False,
-    )
-    if result.returncode != 0:
-        print(f"FAILED: {p}")
+if __name__ == "__main__":
+    main()

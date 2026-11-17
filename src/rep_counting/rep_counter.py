@@ -17,7 +17,7 @@ works at any frame rate / stride (30 Hz, 15 Hz stride-2 features, ...).
 
 Typical use (one call per segment from the segmentation module):
 
-    df = load_features("data/features/synth_val_0001_angles.csv")
+    df = load_features("data/features/synth_v2_train_f1_0001_angles.csv")
     out = count_for_exercise(df, "squat", start_s=4.2, end_s=19.8)
     out["reps"], out["rep_times"]
 """
@@ -98,7 +98,10 @@ EXERCISES = {
 # ---------------------------------------------------------------------
 
 def load_features(path: str | Path) -> pd.DataFrame:
-    df = pd.read_csv(path)
+    import sys
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]/"data_pipeline"))
+    from v2_protocol import feature_frame
+    df = feature_frame(path)
 
     if "time_s" not in df.columns:
         raise ValueError(

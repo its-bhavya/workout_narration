@@ -2,6 +2,7 @@
 __pycache__/
 *.py[cod]
 .venv/
+.pytest_cache/
 
 # Environment
 .env
@@ -14,7 +15,24 @@ data/synthetic/
 data/features/
 
 # Generated outputs
-outputs/
+outputs/*
+!outputs/segmentation_v2/
+outputs/segmentation_v2/*
+!outputs/segmentation_v2/boundary_jump_check.csv
+!outputs/segmentation_v2/boundary_jump_motion.csv
+!outputs/segmentation_v2/cv_counts.csv
+!outputs/segmentation_v2/window_counts.csv
+!outputs/segmentation_v2/has_long_gap_videos.csv
+!outputs/segmentation_v2/phase4_consistency.json
+
+# Local resumable state contains machine-specific paths and input hashes.
+data/manifests/batch_checkpoint.json
+
+# Preserve v1 generated artifacts locally without adding media/caches to git.
+data/_archive_v1/data/synthetic/
+data/_archive_v1/data/features/
+data/_archive_v1/outputs/
+data/_interrupted_archive/
 
 # Jupyter
 .ipynb_checkpoints/

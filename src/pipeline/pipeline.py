@@ -10,6 +10,7 @@ import joblib
 import numpy as np
 import pandas as pd
 
+from ..data_pipeline.v2_protocol import require_v2, active_path
 from ..rep_counting.rep_counter import count_for_exercise
 from ..segmentation.config import OUTPUT_DIR, STRIDE_S, WINDOW_S
 from ..segmentation.features import fill_video_nans, window_features
@@ -65,7 +66,8 @@ class WorkoutPipeline:
             )
 
         # Load model bundle
-        bundle = joblib.load(self.model_path)
+        active_path(self.model_path)
+        bundle = require_v2(joblib.load(self.model_path))
         self.model = bundle["model"]
         self.feature_cols: list[str] = bundle["feature_cols"]
         self.fill_values: dict = bundle["fill_values"]
@@ -77,8 +79,9 @@ class WorkoutPipeline:
             self.tau = float(tau)
             self.min_len = int(min_len)
         elif self.params_path.exists():
+            active_path(self.params_path)
             with open(self.params_path, encoding="utf-8") as fh:
-                p = json.load(fh)
+                p = require_v2(json.load(fh))
             self.tau = float(p.get("tau", 0.7))
             self.min_len = int(p.get("min_len", 2))
         else:

@@ -1,3 +1,7 @@
+> Protocol notice: historical research notes. Contributor-based subject claims,
+> separate-val workflows and v1 results below do not define the current protocol.
+> Active data protocol and Phase 4 instructions: ../docs/PROJECT_CONTEXT.md.
+
 # Continuous Multi-Exercise Workout Video Segmentation, Repetition Counting, and Synchronized Audio Coaching
 ## Comprehensive Project Context, Research Paper Blueprint, and Progress Report
 

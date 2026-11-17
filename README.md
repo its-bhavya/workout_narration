@@ -1,100 +1,39 @@
-# workout-narration
+# Workout narration: active v2 protocol
 
-Silent workout video to auto-generated coaching narration (text + audio).
-Exercises in scope: squat, pushup, jumping jack.
+Active protocol and provenance: [PROJECT_CONTEXT](docs/PROJECT_CONTEXT.md).
 
-## Team / Ownership
-- Bhavya — src/data_pipeline, src/segmentation
-- Deepti — src/rep_counting
-- Ishita — src/narration, src/evaluation, paper/
+RepCount only, pass/review, fps >=20: train is original train (239 clips);
+test is original val+test (94 clips). Countix is excluded. Contributor prefixes
+are not subjects. There is no separate validation split.
 
-## Setup
-1. Install uv, then run: `uv sync`
-2. Raw video data lives on shared Google Drive (not in git) — see data/README.md
-3. Manifests in data/manifests/ are the source of truth for what data is usable
+Five train source-clip folds use stratified seed 3969, selected on total margin
+balance only. Construction uses seed 42: 24 videos/fold, K=3..5, train cap 5,
+test cap 1, 21 test videos. Exercise slots stay within +/-10%; clips never
+repeat within a video. Train reuse spread is <=1 per exercise/fold.
 
-## Data
-Single source: RepCount dataset (squat, push_up, jump_jack). See data/README.md for the full manifest breakdown and pipeline notes.
+Phase 4 uses per-video features in data/features/v2/ and existing window code
+in outputs/segmentation_v2/. Run-ID guards reject missing/non-v2 provenance and
+archived data. V1 data is frozen in data/_archive_v1/. Native clip caches are
+deferred; no separate-val training/evaluation command is active.
 
-## Structure
-See data/README.md and each src/ subfolder's README for details.
+From the repository root, resume the entire preparation workflow:
 
-## Rep counting status (November 2026)
-Rule-based counter (adaptive thresholds + hysteresis state machine with temporal
-confirmation) on joint angle CSVs. Evaluated on train+val synthetic videos using
-ground-truth segment windows. See `src/rep_counting/README.md` for full results
-and known issues.
-
-Temporal confirmation (`confirm_s`) was added to the state machine: a threshold
-crossing must hold for a set duration (0.10–0.15 s depending on exercise) before a
-rep is counted, which filters brief false crossings from pose jitter. Jump_jack
-exact-match improved from 45% to 58% and within-1 from 71% to 84% with this change.
-
-| exercise | exact_% | within1_% | MAE | precision | recall |
-|----------|---------|-----------|-----|-----------|--------|
-| squat | 64.9 | 75.7 | 2.2 | 0.98 | 0.80 |
-| jump_jack | 57.8 | 84.4 | 2.3 | 0.99 | 0.91 |
-| push_up | 48.6 | 59.5 | 2.9 | 0.93 | 0.89 |
-
-Multi-person tracking (`PosePersonTracker` in `pose_utils.py`) is implemented in
-the pose extraction pipeline to lock onto the exercising subject across frames.
-Angle CSVs need re-extraction to benefit from this; the `stu10_49` multi-person
-overcounting case persists until then.
-
-Test split is locked until the method is final.
-
-## Segmentation status (November 2026)
-Sliding-window classifier + temporal smoothing. The training pipeline now supports
-8 classifier types via `--model` (rf, extra_trees, gbt, hist_gbt, lr, svm, knn,
-mlp). Smoothing was improved: transition labels are preserved during low-confidence
-filtering, short exercise blips absorb into neighbouring transitions, and
-sandwiched transitions between identical exercises are collapsed (e.g.
-`push_up | transition | push_up` merges into one `push_up` run). On the test split
-with HistGradientBoosting, these changes improved Edit score from 56.2 to 64.1 and
-transition frame-F1 from 0.36 to 0.50. See `src/segmentation/README.md` and
-`outputs/segmentation/smoothing_improvement_report.md` for details.
-
-## Integrated Pipeline & Narration Engine Interface
-
-The segmentation and rep counting modules are integrated into an end-to-end pipeline in `src/pipeline` and runnable via `main.py`.
-
-Given any multi-exercise video (video file, angles CSV, or video ID), the pipeline:
-1. Resolves input features (or extracts MediaPipe joint angles).
-2. Runs sliding-window classification and OnlineTAS temporal smoothing to predict exercise and transition segments.
-3. Runs per-segment hysteresis state-machine rep counting with boundary padding.
-4. Generates structured output, workout summaries, and a timestamp-aligned narration cue sheet ready for TTS engines.
-
-### Running via CLI
-
-```bash
-# Analyze a synthetic video (default: synth_test_0001)
-uv run python main.py synth_test_0001
-
-# Analyze an MP4 video or CSV and export results for the narration engine
-uv run python main.py path/to/video.mp4 --export workout_narration.json
-
-# Output raw JSON to pipe directly into downstream narration / TTS tools
-uv run python main.py synth_test_0001 --json
+```powershell
+uv run --no-sync python -B src/data_pipeline/phase4.py
 ```
 
-### Python API
+This extracts train and test at stride 2 with one worker, without --force;
+then rebuilds summary/long-gap diagnostics, reports boundary ratios, builds
+windows and reports counts before/after training purity 0.8. Test counts stay
+unfiltered. `src/segmentation/cv.py:get_cv_split` supplies training folds !=k
+and validation fold k, asserting zero source-clip overlap. No models are trained
+or evaluated. Test is extraction and counting only.
 
-```python
-from src.pipeline import WorkoutPipeline, analyze_workout
+To rerun only reports/windows after extraction is complete:
 
-# Single-call execution
-result = analyze_workout("synth_test_0001")
-
-# High-level summary
-print(result.summary.exercise_counts)  # e.g. {'jump_jack': 37, 'push_up': 58}
-print(result.summary.total_reps)       # e.g. 95
-
-# Segments breakdown
-for seg in result.segments:
-    print(f"{seg.exercise}: {seg.start_time:.1f}s - {seg.end_time:.1f}s | Reps: {seg.rep_count}")
-
-# Formatted narration cue sheet ready for TTS / narration engine
-cues = result.to_narration_script()
-# Each cue has: {"time_s": ..., "cue_type": ..., "text": ..., "exercise": ...}
+```powershell
+uv run --no-sync python -B src/data_pipeline/phase4.py --postprocess-only
 ```
 
+Historical documentation is retained under docs/history/ and is not an active
+workflow. See docs/V2_GENERATION.md for rendering/resume details.

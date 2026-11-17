@@ -49,6 +49,10 @@ logging.basicConfig(level=logging.INFO, format="%(levelname)s: %(message)s")
 log = logging.getLogger(__name__)
 
 # Stable class index for deterministic tie-breaking.
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "data_pipeline"))
+from v2_protocol import catalog, feature_frame
+
 CLASS_ORDER = {c: i for i, c in enumerate(CLASSES)}
 
 
@@ -62,17 +66,7 @@ def load_split_map(synth_dir: Path) -> dict[str, str]:
     The split is read from the JSON ``"split"`` field (never from the CSV and
     never tuned on test).
     """
-    split_map: dict[str, str] = {}
-    for j in sorted(synth_dir.rglob("*.json")):
-        try:
-            with open(j) as fh:
-                meta = json.load(fh)
-        except Exception as exc:  # noqa: BLE001
-            log.warning("Could not read %s: %s", j, exc)
-            continue
-        vid = meta.get("video_id") or j.stem
-        split_map[vid] = meta.get("split", "")
-    return split_map
+    return {vid: meta["split"] for vid, meta in catalog(synth_dir).items()}
 
 
 # ---------------------------------------------------------------------------
@@ -93,7 +87,7 @@ def make_windows_for_video(
     ----------
     df          : angle CSV loaded into a DataFrame (needs ``time_s`` and
                   ``seg_label`` columns).
-    video_id    : synthetic video id (e.g. ``synth_train_0001``).
+    video_id    : synthetic video id (e.g. ``synth_v2_train_f0_0001``).
     split       : split label for this video.
     window_s    : window length in seconds.
     stride_s    : step between window starts in seconds.
@@ -182,7 +176,8 @@ def main() -> None:
                         help="Output windows CSV (default: outputs/segmentation/windows.csv)")
     args = parser.parse_args()
 
-    split_map = load_split_map(args.synth_dir)
+    videos = catalog(args.synth_dir)
+    split_map = {vid: meta["split"] for vid, meta in videos.items()}
     log.info("Loaded %d synthetic video JSONs from %s", len(split_map), args.synth_dir)
 
     # Only top-level *_angles.csv: this excludes the stray rep-counting eval
@@ -191,6 +186,9 @@ def main() -> None:
     # matching JSON is skipped.
     csvs = sorted(args.features_dir.glob("*_angles.csv"))
     log.info("Found %d top-level *_angles.csv files", len(csvs))
+
+    if {p.stem.removesuffix("_angles") for p in csvs} != set(videos):
+        raise ValueError("Feature coverage must exactly match the v2 index before windowing")
 
     all_windows: list[dict] = []
     seen_splits: dict[str, str] = {}
@@ -210,15 +208,17 @@ def main() -> None:
             )
         seen_splits[video_id] = split
 
-        df = pd.read_csv(csv_path)
+        df = feature_frame(csv_path, videos[video_id])
         wins = make_windows_for_video(df, video_id, split)
+        for window in wins:
+            window.update(fold=videos[video_id]["fold"], run_id="v2")
         all_windows.extend(wins)
         log.info("%-18s (%-5s): %d windows", video_id, split, len(wins))
 
     out_df = pd.DataFrame(
         all_windows,
         columns=["video_id", "split", "win_idx", "t_start", "t_end", "t_center",
-                 "label", "purity", "row_start", "row_end"],
+                 "label", "purity", "row_start", "row_end", "fold", "run_id"],
     )
 
     # Assert one split per video across the whole run.

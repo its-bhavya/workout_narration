@@ -208,6 +208,7 @@ def plot_video(
 
 
 def main() -> None:
+    raise RuntimeError("Native per-clip pilot workflow deferred; Phase 4 uses per-video v2 features only")
     if not MANIFEST_PATH.exists():
         raise FileNotFoundError(f"Manifest not found: {MANIFEST_PATH}")
 

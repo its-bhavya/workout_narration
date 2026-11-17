@@ -6,9 +6,9 @@ No re-extraction or MediaPipe needed.
 
 Usage (run from repo root)::
 
-    python src/segmentation/predict_video.py synth_test_0001
-    python src/segmentation/predict_video.py synth_test_0003 --no-gt
-    python src/segmentation/predict_video.py synth_test_0001 --show-windows
+    python src/segmentation/predict_video.py synth_v2_test_0001
+    python src/segmentation/predict_video.py synth_v2_test_0001 --no-gt
+    python src/segmentation/predict_video.py synth_v2_test_0001 --show-windows
 """
 from __future__ import annotations
 
@@ -48,8 +48,10 @@ PARAMS_PATH = OUTPUT_DIR / "chosen_params.json"
 # ---------------------------------------------------------------------------
 
 def _load_model(model_path: Path) -> dict:
+    from v2_protocol import active_path, require_v2
+    active_path(model_path)
     bundle = joblib.load(model_path)
-    return bundle  # keys: model, feature_cols, fill_values, classes
+    return require_v2(bundle)  # keys: model, feature_cols, fill_values, classes
 
 
 def _load_params(params_path: Path) -> tuple[float, int]:
@@ -60,11 +62,12 @@ def _load_params(params_path: Path) -> tuple[float, int]:
 
 def _load_gt(video_id: str, synth_dir: Path) -> tuple[list[dict], float] | tuple[None, None]:
     """Return (gt_segments, video_end_s) from the boundary JSON, or (None, None)."""
-    for split in ("test", "val", "train"):
+    for split in ("train", "test"):
         j = synth_dir / split / f"{video_id}.json"
         if j.exists():
             with open(j) as fh:
-                meta = json.load(fh)
+                from v2_protocol import load_json
+                meta = load_json(j)
             fps = float(meta.get("fps", 30))
             n_frames = int(meta.get("n_frames", 0))
             raw = meta.get("segments", [])
@@ -112,7 +115,8 @@ def predict(
             f"Angles CSV not found: {csv_path}\n"
             "Run extract_pose_features.py on this video first."
         )
-    df = pd.read_csv(csv_path)
+    from v2_protocol import feature_frame
+    df = feature_frame(csv_path)
     print(f"Loaded {len(df)} rows from {csv_path.name}")
 
     # ---- 2. Load model ---------------------------------------------------
@@ -236,7 +240,7 @@ def main() -> None:
     )
     parser.add_argument(
         "video_id",
-        help="Synthetic video id, e.g. synth_test_0001",
+        help="Synthetic video id, e.g. synth_v2_test_0001",
     )
     parser.add_argument(
         "--no-gt",

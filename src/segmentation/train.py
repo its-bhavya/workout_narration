@@ -77,6 +77,9 @@ DEFAULT_MODEL = "rf"
 # Feature matrix construction
 # ---------------------------------------------------------------------------
 
+from v2_protocol import feature_frame
+
+
 def build_feature_matrix(
     windows: pd.DataFrame,
     features_dir: Path,
@@ -95,7 +98,7 @@ def build_feature_matrix(
             path = features_dir / f"{video_id}_angles.csv"
             if not path.exists():
                 raise FileNotFoundError(f"Missing angle CSV: {path}")
-            video_cache[video_id] = fill_video_nans(pd.read_csv(path))
+            video_cache[video_id] = fill_video_nans(feature_frame(path))
         return video_cache[video_id]
 
     # Resolve the canonical channel set + feature column order from the first
@@ -186,6 +189,7 @@ def build_val_report(
 # ---------------------------------------------------------------------------
 
 def main() -> None:
+    raise RuntimeError("Separate-val workflow retired. Phase 4 permits data preparation only; use cv.get_cv_split for future CV training.")
     parser = argparse.ArgumentParser(
         description="Train the window classifier and evaluate on val."
     )

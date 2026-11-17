@@ -36,6 +36,9 @@ import argparse
 import json
 import logging
 from pathlib import Path
+import sys
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]/"data_pipeline"))
+from v2_protocol import load_json, FEATURES_DIR
 
 import numpy as np
 import pandas as pd
@@ -76,7 +79,7 @@ def evaluate_video(
     args: argparse.Namespace,
 ) -> list[dict]:
 
-    meta = json.loads(json_path.read_text())
+    meta = load_json(json_path)
     video_id = meta["video_id"]
     fps = float(meta["fps"])
 
@@ -178,7 +181,7 @@ def print_calibration(rows: pd.DataFrame, synthetic_dir: Path, splits: list[str]
 
     for split in splits:
         for jp in sorted((synthetic_dir / split).glob("*.json")):
-            meta = json.loads(jp.read_text())
+            meta = load_json(jp)
             fps = float(meta["fps"])
 
             for seg in meta["segments"]:
@@ -214,11 +217,12 @@ def print_calibration(rows: pd.DataFrame, synthetic_dir: Path, splits: list[str]
 
 
 def main() -> None:
+    raise RuntimeError("Rep evaluation/calibration is disabled in Phase 4; test is extraction/counting only")
     p = argparse.ArgumentParser()
     p.add_argument("--synthetic-dir", type=Path, default=Path("data/synthetic"))
-    p.add_argument("--features-dir", type=Path, default=Path("data/features"))
-    p.add_argument("--splits", nargs="+", default=["train", "val"])
-    p.add_argument("--out", type=Path, default=Path("outputs/rep_eval"))
+    p.add_argument("--features-dir", type=Path, default=FEATURES_DIR)
+    p.add_argument("--splits", nargs="+", default=["train"])
+    p.add_argument("--out", type=Path, default=Path("outputs/rep_eval_v2"))
     p.add_argument("--mode", choices=["adaptive", "fixed"], default=None)
     p.add_argument("--fracs", nargs=2, type=float, default=None)
     p.add_argument("--use-3d", action="store_true")
