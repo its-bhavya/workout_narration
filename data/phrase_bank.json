@@ -1,0 +1,52 @@
+{
+  "segment_start": [
+    "Get ready for {exercise} now.",
+    "Starting up with {exercise}. Let us move.",
+    "Up next, we have {exercise}.",
+    "Prepare your body for {exercise}.",
+    "Let us dive into {exercise}.",
+    "Moving right into {exercise}.",
+    "Here come your {exercise}.",
+    "Set your position for {exercise}."
+  ],
+  "rep": [
+    "{n}.",
+    "Count {n}.",
+    "Good, {n}.",
+    "Strong, {n}.",
+    "Hit {n}.",
+    "That is {n}.",
+    "And {n}.",
+    "Lock in {n}.",
+    "Keep going, {n}.",
+    "Push for {n}."
+  ],
+  "milestone": [
+    "Awesome work hitting {n}.",
+    "You reached {n}, keep up the tempo.",
+    "Already at {n}, look at you go.",
+    "That is {n}, stay strong and focused.",
+    "Way to power through to {n}.",
+    "Solid work reaching {n}.",
+    "Crushing it, you have reached {n}.",
+    "Outstanding effort on hitting {n}."
+  ],
+  "transition": [
+    "Great {prev}. Now get ready for {next}.",
+    "Goodbye {prev}, say hello to {next}.",
+    "Wonderful {prev}. Next up, prepare for {next}.",
+    "Finished with {prev}. Moving right to {next}.",
+    "That wraps {prev}. Switch gears to {next}.",
+    "Excellent {prev}. Now let us tackle {next}.",
+    "Rest after {prev}, then prepare for {next}.",
+    "Done with {prev}. Time to bring on {next}."
+  ],
+  "workout_end": [
+    "Final {exercise} finished. You crushed the entire routine today.",
+    "Excellent finish with those {exercise}. You are officially done.",
+    "Fantastic effort on {exercise}. You completed the full workout.",
+    "Way to finish strong with {exercise}. Outstanding session today.",
+    "That concludes your {exercise} and the workout. Great work.",
+    "Beautiful work on those {exercise}. You finished it all."
+  ]
+}
