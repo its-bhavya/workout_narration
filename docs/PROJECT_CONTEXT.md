@@ -1,5 +1,30 @@
 # Active v2 construction protocol
 
+## Current full-flow handoff (17 November 2026)
+
+Run instructions: [END_TO_END.md](END_TO_END.md). Current supported flow is
+registered v2 media + cached canonical pose features -> frozen all-train RF
+bundle -> smoothed exercise/transition segments -> fixed exercise-specific rep
+counter -> text cue export -> separate narration event/speech scheduler -> WAV.
+`main.py` does not synthesize audio. The runbook's API bridge uses predicted
+boundaries and absolute rep completion times, retains zero-rep exercises and
+omits transition segments from the exercise-only speech input. It does not use
+the legacy ground-truth narration demo or its old splits.csv loader.
+
+Deterministic templates and seed 42 are the default; an optional cached Gemini
+phrase bank changes wording only. gTTS needs network access for uncached text,
+and caches sentence MP3s. Scheduling may skip/delay cues and extend the track
+beyond video duration; output is narration-only WAV, not a muxed MP4. No speech
+quality or human-study result is claimed. This documentation update did not
+invoke external synthesis or generate new benchmark outputs.
+
+Model results are recorded in [V2_MODEL_RESULTS.md](results/V2_MODEL_RESULTS.md).
+The [single-video rep diagnostic](results/V2_FULL_VIDEO_REP_RESULTS.json) gave
+27 predicted versus 44 annotated reps; it is not an aggregate counting score.
+Arbitrary unannotated-video ingestion remains disabled. Existing pose person
+selection is annotation-assisted upstream; do not present the current flow as
+validated unassisted raw-video deployment. V1 archive remains frozen.
+
 Approved on 17 November 2026. The root PROJECT_CONTEXT.md contains historical
 v1 results; its contributor/subject grouping claims do not define v2.
 

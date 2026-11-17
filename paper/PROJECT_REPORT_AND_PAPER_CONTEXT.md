@@ -1,3 +1,23 @@
+## Current full-flow implementation and reporting scope
+
+Runnable instructions: [END_TO_END.md](../docs/END_TO_END.md). The supported
+offline flow is registered v2 video/canonical pose features -> CV-selected,
+all-train RF -> predicted temporal segments -> fixed per-exercise rep counter
+-> predicted completion-time events -> scheduled gTTS narration-only WAV.
+`main.py` exports text and counts; audio uses the separate documented API bridge.
+Templates are the default; optional cached Gemini phrases alter wording only.
+Neither ground-truth rep boundaries nor the old narration demo loader supply
+events in this prediction recipe. Upstream pose selection nevertheless remains
+annotation-assisted; unassisted new-video ingestion is not implemented.
+
+The scheduler can skip/delay cues, and the WAV can extend past video duration.
+Do not claim real-time execution, perfect synchronization, a muxed-video
+implementation or evaluated narration quality. The existing single-test-video
+rep diagnostic gave 27 predicted versus 44 annotated reps; this is illustrative,
+not a dataset counting score. Model evaluation and its limitations are recorded
+in [V2_MODEL_RESULTS.md](../docs/results/V2_MODEL_RESULTS.md). No new model,
+counting or human-study results were produced by this documentation handoff.
+
 ## Current v2 model workflow decision record (17 November 2026)
 
 See [../docs/V2_TRAINING.md](../docs/V2_TRAINING.md) and the active docs/PROJECT_CONTEXT.md for implementation

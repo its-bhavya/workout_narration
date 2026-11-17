@@ -1,3 +1,15 @@
+## Current segmentation -> counting -> narration handoff
+
+See [the runnable end-to-end guide](docs/END_TO_END.md) and
+[active context](docs/PROJECT_CONTEXT.md). Registered v2 video/features feed the
+frozen CV-selected RF, then predicted intervals feed the fixed rep counter.
+`main.py` exports counts, absolute rep times and text cues; a documented API
+bridge sends predicted exercise segments to the separate gTTS scheduler and
+WAV renderer. Templates are default; cached LLM phrases are optional. This
+does not ingest arbitrary new MP4s or produce a muxed narrated video. Pose
+selection remains annotation-assisted, and audio quality is not yet evaluated.
+Historical ground-truth narration demos are not the v2 prediction workflow.
+
 ## Current v2 model workflow decision record (17 November 2026)
 
 See [docs/V2_TRAINING.md](docs/V2_TRAINING.md) and the active docs/PROJECT_CONTEXT.md for implementation

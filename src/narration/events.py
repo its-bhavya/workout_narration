@@ -20,7 +20,7 @@ def choose_cadence(rep_times, min_gap=MIN_SPOKEN_GAP_S):
     return CADENCES[-1]
 
 
-def build_events(segments, min_gap=MIN_SPOKEN_GAP_S):
+def build_events(segments, min_gap=MIN_SPOKEN_GAP_S, *, align_starts=False, workout_end=None):
     events = []
     for idx, seg in enumerate(segments):
         if idx == 0:
@@ -28,7 +28,7 @@ def build_events(segments, min_gap=MIN_SPOKEN_GAP_S):
                            "type": "segment_start", "exercise": seg["exercise"]})
         else:
             prev = segments[idx - 1]
-            events.append({"time": prev["end_time"] + TRANSITION_DELAY_S, "type": "transition",
+            events.append({"time": seg["start_time"] if align_starts else prev["end_time"] + TRANSITION_DELAY_S, "type": "transition",
                            "prev": prev["exercise"], "next": seg["exercise"]})
 
         k = choose_cadence(seg["rep_times"], min_gap)
@@ -46,6 +46,6 @@ def build_events(segments, min_gap=MIN_SPOKEN_GAP_S):
 
     if segments:
         last = segments[-1]
-        events.append({"time": last["end_time"] + TRANSITION_DELAY_S,
+        events.append({"time": workout_end if workout_end is not None else last["end_time"] + TRANSITION_DELAY_S,
                        "type": "workout_end", "exercise": last["exercise"]})
     return sorted(events, key=lambda e: e["time"])

@@ -1,5 +1,12 @@
 # V2 source-clip CV, evaluation and integration
 
+For a single video, follow [the end-to-end PowerShell runbook](docs/END_TO_END.md):
+registered v2 video/features -> frozen segmentation model -> per-segment rep
+counting -> text cues -> scheduled gTTS narration WAV. It includes the bridge
+from analysis JSON to audio, output locations and optional cached LLM phrases.
+Arbitrary new MP4 ingestion is still deferred; `main.py` alone exports text,
+not audio or a narrated MP4.
+
 Current training/evaluation and integration guide: [V2_TRAINING.md](docs/V2_TRAINING.md).
 
 ## Data preparation and v2 protocol

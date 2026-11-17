@@ -1,0 +1,304 @@
+{
+  "run_id": "v2",
+  "split": "test",
+  "n_videos": 21,
+  "created_at_utc": "2026-11-17T11:36:03.729517+00:00",
+  "experiment_id": "cv8_v2_seed42_p080_20261117",
+  "model_path": "C:\\Users\\Bhavya\\Desktop\\projects\\workout_narration\\outputs\\segmentation_v2\\experiments\\cv8_v2_seed42_p080_20261117\\final\\model.joblib",
+  "model_sha256": "989cf80af9e7642c9c6593f53e43c64be64a87ea4cd9bce9416fbb1f807c3e7b",
+  "counter_source_sha256": "2764f6f85c5b28fb8521a65c90a189c5e6aadb56c739dc8e99ffb083f844fada",
+  "counter_config": {
+    "squat": {
+      "columns": [
+        "knee_L",
+        "knee_R"
+      ],
+      "combine": "best",
+      "pattern": "down_up",
+      "thresholds": [
+        150.0,
+        168.0
+      ],
+      "mode": "adaptive",
+      "fracs": [
+        0.35,
+        0.65
+      ],
+      "smooth_s": 0.5,
+      "min_gap_s": 0.5,
+      "min_range_deg": 25.0,
+      "confirm_s": 0.15
+    },
+    "push_up": {
+      "columns": [
+        "elbow_L",
+        "elbow_R"
+      ],
+      "combine": "best",
+      "pattern": "down_up",
+      "thresholds": [
+        135.0,
+        148.0
+      ],
+      "mode": "adaptive",
+      "fracs": [
+        0.25,
+        0.55
+      ],
+      "smooth_s": 0.1,
+      "min_gap_s": 0.2,
+      "min_range_deg": 20.0,
+      "confirm_s": 0.1
+    },
+    "jump_jack": {
+      "columns": [
+        "arm_raise_L",
+        "arm_raise_R"
+      ],
+      "combine": "mean",
+      "pattern": "low_high_low",
+      "thresholds": [
+        60.0,
+        120.0
+      ],
+      "mode": "adaptive",
+      "fracs": [
+        0.35,
+        0.65
+      ],
+      "smooth_s": 0.3,
+      "min_gap_s": 0.5,
+      "min_range_deg": 40.0,
+      "confirm_s": 0.15
+    }
+  },
+  "settings": {
+    "predicted_end_padding_s": 0.3,
+    "oracle_end_padding_s": 0.0,
+    "max_gap_s": 0.4,
+    "min_valid_fraction": 0.5,
+    "tau": 0.5,
+    "min_len": 3
+  },
+  "parameters_tuned": false,
+  "end_to_end_video_exercise": {
+    "overall": {
+      "n": 63,
+      "annotated_total": 1590,
+      "predicted_total": 1441,
+      "mae": 3.4761904761904763,
+      "bias": -2.365079365079365,
+      "exact_match": 0.4603174603174603,
+      "within_one": 0.6507936507936508,
+      "normalized_mae": 0.12115506463645039,
+      "wape": 0.13773584905660377
+    },
+    "by_exercise": {
+      "jump_jack": {
+        "n": 21,
+        "annotated_total": 761,
+        "predicted_total": 747,
+        "mae": 2.9523809523809526,
+        "bias": -0.6666666666666666,
+        "exact_match": 0.38095238095238093,
+        "within_one": 0.5714285714285714,
+        "normalized_mae": 0.11827320449957034,
+        "wape": 0.08147174770039421
+      },
+      "push_up": {
+        "n": 21,
+        "annotated_total": 468,
+        "predicted_total": 362,
+        "mae": 5.333333333333333,
+        "bias": -5.0476190476190474,
+        "exact_match": 0.6190476190476191,
+        "within_one": 0.6190476190476191,
+        "normalized_mae": 0.10072152900886928,
+        "wape": 0.23931623931623933
+      },
+      "squat": {
+        "n": 21,
+        "annotated_total": 361,
+        "predicted_total": 332,
+        "mae": 2.142857142857143,
+        "bias": -1.380952380952381,
+        "exact_match": 0.38095238095238093,
+        "within_one": 0.7619047619047619,
+        "normalized_mae": 0.14447046040091152,
+        "wape": 0.12465373961218837
+      }
+    }
+  },
+  "end_to_end_video_total": {
+    "n": 21,
+    "annotated_total": 1590,
+    "predicted_total": 1441,
+    "mae": 9.761904761904763,
+    "bias": -7.095238095238095,
+    "exact_match": 0.0,
+    "within_one": 0.14285714285714285,
+    "normalized_mae": 0.14802669329343995,
+    "wape": 0.1289308176100629
+  },
+  "oracle_gt_segment": {
+    "overall": {
+      "n": 79,
+      "annotated_total": 1590,
+      "predicted_total": 1399,
+      "mae": 2.848101265822785,
+      "bias": -2.4177215189873418,
+      "exact_match": 0.5189873417721519,
+      "within_one": 0.6835443037974683,
+      "normalized_mae": 0.16110655889446027,
+      "wape": 0.14150943396226415
+    },
+    "by_exercise": {
+      "jump_jack": {
+        "n": 27,
+        "annotated_total": 761,
+        "predicted_total": 732,
+        "mae": 1.962962962962963,
+        "bias": -1.0740740740740742,
+        "exact_match": 0.4444444444444444,
+        "within_one": 0.7037037037037037,
+        "normalized_mae": 0.1345837622798407,
+        "wape": 0.06964520367936924
+      },
+      "push_up": {
+        "n": 27,
+        "annotated_total": 468,
+        "predicted_total": 354,
+        "mae": 4.592592592592593,
+        "bias": -4.222222222222222,
+        "exact_match": 0.4444444444444444,
+        "within_one": 0.5925925925925926,
+        "normalized_mae": 0.19135641030680353,
+        "wape": 0.26495726495726496
+      },
+      "squat": {
+        "n": 25,
+        "annotated_total": 361,
+        "predicted_total": 313,
+        "mae": 1.92,
+        "bias": -1.92,
+        "exact_match": 0.68,
+        "within_one": 0.76,
+        "normalized_mae": 0.15708133971291866,
+        "wape": 0.1329639889196676
+      }
+    }
+  },
+  "inputs": [
+    {
+      "video_id": "synth_v2_test_0001",
+      "features_sha256": "8d6dfac44e59c3f790f0fa16ce2baf7f841832fc1e97e68e61d90c000a1bc875",
+      "annotations_sha256": "5fcbe3ade6c1229d50785112f5f3a9589d681fc1a09ad404f04510e7a4c9104a"
+    },
+    {
+      "video_id": "synth_v2_test_0002",
+      "features_sha256": "d016e2f5feca8e11e05e97982394565740fe8ace07ad14364e6343026c42dbe8",
+      "annotations_sha256": "4002c6ca89be13b813145767469529c43cb4f0faeeb840a69b9af3af0bbf3698"
+    },
+    {
+      "video_id": "synth_v2_test_0003",
+      "features_sha256": "86ca330b69e6ee896fa30b523788ec283361650e5d52d2c1d5b7372898937c6c",
+      "annotations_sha256": "9e90c1303f7a7ca787ab1833e3235ca7e2522153324497b0878332b96c730bf8"
+    },
+    {
+      "video_id": "synth_v2_test_0004",
+      "features_sha256": "7dff098fe886f445a31fdcfce9c160cbfa26802909d7f2ba916d82e309ea9924",
+      "annotations_sha256": "be9afeb635b06cb72d717cdc0fbb48c09579c67f57a16299df7cc72b20c06c40"
+    },
+    {
+      "video_id": "synth_v2_test_0005",
+      "features_sha256": "959a821cbce2ab6efedc964a1ad5d1efc6a70168a8ace31ff139c82090fb072a",
+      "annotations_sha256": "eb34af8164e90a786e717f70dc791dd1e83436450ee7411e9324fcb7730a08c7"
+    },
+    {
+      "video_id": "synth_v2_test_0006",
+      "features_sha256": "a211033e5d06a61306bc30dfdf71a80d6741005e0a1a6298f9844094a019902f",
+      "annotations_sha256": "50622680bfca85d2c04f6a0ce9820a79f65a3fe1932d44adfe449995927e0e47"
+    },
+    {
+      "video_id": "synth_v2_test_0007",
+      "features_sha256": "bb3a573d9ba6e07ed88883837e1bc8fdd0df943865c8b11696586650313b66b0",
+      "annotations_sha256": "97bab74bbf60931ddd8173b116302f41fef80db17be02e63ffe275ec773ffab9"
+    },
+    {
+      "video_id": "synth_v2_test_0008",
+      "features_sha256": "8c39c1df4d152b345e146f534caaa3c55fbdf5180799ca6cee8add3a96013261",
+      "annotations_sha256": "90565bfaf435750cf15c947a9a02ecad1c2c3c7f7b9572d9ee8394188deddea3"
+    },
+    {
+      "video_id": "synth_v2_test_0009",
+      "features_sha256": "75f37bbe73178f1815c8e1b32e1e9ca848e6bc0aa826e5fda4d91c4008675db8",
+      "annotations_sha256": "232683282200a0fc17eea3e28dc7c4e5fe8c85041a5d18bc15e84bd28e2e300a"
+    },
+    {
+      "video_id": "synth_v2_test_0010",
+      "features_sha256": "1da5447ae6e38b909de3828cd1de4786f9779986d37616efdcea86c2afdca172",
+      "annotations_sha256": "d7a8f4d6adbfa529cac4b99f6d3d71815abb13c8af3e503be2a29fdb0b94c33e"
+    },
+    {
+      "video_id": "synth_v2_test_0011",
+      "features_sha256": "e28df97c874df374a3186ca74bbcc9e32a21042e2c74afe612fdd17165c5a415",
+      "annotations_sha256": "ace74c3258c925329df5455e27d0b84ea6a432428baf3e37efb8a8c3967f8d4a"
+    },
+    {
+      "video_id": "synth_v2_test_0012",
+      "features_sha256": "861a642f2d983feb590e1de49bea2dc6e79b78488bb3c32469beec5193e5cec9",
+      "annotations_sha256": "74bd7bdf7d0aad7714d0d9a77f78e9a551e1d9e136d36cf6211533fd66a82b52"
+    },
+    {
+      "video_id": "synth_v2_test_0013",
+      "features_sha256": "28e8b3fcdabc7ac535a3a9afa003e8671f2b9f2c3a8c2c6ed8762cbfb62e2d75",
+      "annotations_sha256": "dd89a5f491c127e7851aa2b0febca7b052371ef3daf53eaad5671608bcebe55b"
+    },
+    {
+      "video_id": "synth_v2_test_0014",
+      "features_sha256": "84009d7df9acb7ea77f3e19a2ff91e6f4ed3247ac10956c7b26113a3386b8135",
+      "annotations_sha256": "b470b605f333524f3d648018bd2db296cc65935643478f8485bed56330674ddc"
+    },
+    {
+      "video_id": "synth_v2_test_0015",
+      "features_sha256": "f1180bd4de372360d4727149af0c689d40a1ad5f1790276b89e7292b25ded710",
+      "annotations_sha256": "8bf65db36b09e5ce52b5d1512b84f1f4970049e00eb24cb2aec26a534adbfe0c"
+    },
+    {
+      "video_id": "synth_v2_test_0016",
+      "features_sha256": "fb9693844eaa7fb6466a8b8b5a848789f463d15d858487d155fb42f25afc8671",
+      "annotations_sha256": "1f8b4b9cdba023e20d03e9006dcb613cece7fa2a7b355573c269d311027ebdf2"
+    },
+    {
+      "video_id": "synth_v2_test_0017",
+      "features_sha256": "106261eda7ef0f1851f4361771654daad5b39458f1c25369ccd26b224590d8ba",
+      "annotations_sha256": "f36070e9074dcc2793ac5dbc8c594b84f5467b1c1d0b116ed08cc4c2785ef6e1"
+    },
+    {
+      "video_id": "synth_v2_test_0018",
+      "features_sha256": "47990560a213671c495e683eef62b3b755852fbd934be67d61791f0864c9324e",
+      "annotations_sha256": "8fdbe655f9dd96d9a71735d0217c90e18d6e0f05c8c83c614a1a418b0d0a3154"
+    },
+    {
+      "video_id": "synth_v2_test_0019",
+      "features_sha256": "688d9a330ee8b0a3b30ad57ef74d871583fa997d836177788ebd86ceb1fd9f32",
+      "annotations_sha256": "2bf69508eda71757ea74fbfd61c76d14ba065215d758c21221c0de33ff6ab185"
+    },
+    {
+      "video_id": "synth_v2_test_0020",
+      "features_sha256": "9f0be3c3065a1c910a8d8a578ac2baa7a203a874c9177f032a5f76a35a866612",
+      "annotations_sha256": "63e13d924a7796ac44e60598564497fea9e8b3a3541b26baa9c835489b7be566"
+    },
+    {
+      "video_id": "synth_v2_test_0021",
+      "features_sha256": "cdda0b30d3312a0a77db478561ae3a06ba2aa4322bfe34a114829aa28c8e80e8",
+      "annotations_sha256": "a0caff4788108daedc4f32193dfcec3f2c6aef218b550051de867ffbc48f685b"
+    }
+  ],
+  "limitations": [
+    "Pose extraction is annotation-assisted upstream.",
+    "Oracle metrics use ground-truth windows, not predicted boundaries.",
+    "Video totals can hide errors cancelling across exercises.",
+    "Test results are reporting only; further tuning requires training data."
+  ]
+}

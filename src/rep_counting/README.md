@@ -50,3 +50,15 @@ Prediction and narration use that same bundle and exact n_frames/fps duration.
 Ground-truth comparison is opt-in. Dataset run_id=v2 and experiment_id remain
 distinct, with input hashes and feature-schema checks. Model compatibility was
 verified on synthetic unit-test fixtures; this is not a new benchmark result.
+
+## Fixed v2 final-test evaluation
+
+```powershell
+uv run --no-sync python -m src.rep_counting.evaluate_final --out-dir outputs/rep_eval_v2/new_run
+```
+
+Evaluates every indexed test video using the frozen segmentation model and current
+counter defaults. Records end-to-end video/exercise counts, video totals, and a
+separate ground-truth-window counter diagnostic, with model/input hashes and
+settings. No calibration is performed; do not tune from test results. Existing
+output directories are preserved. See [recorded results](../../docs/results/V2_REP_COUNT_RESULTS.md).

@@ -70,7 +70,14 @@ def main() -> None:
         help="Frozen CV minimum run length; if supplied, must match the selected bundle.",
     )
 
+    parser.add_argument("--narration-dir", type=Path,
+                        help="Synthesize narration.wav and narration.json from predicted segments.")
+    parser.add_argument("--narration-seed", type=int, default=42)
+    parser.add_argument("--llm", action="store_true",
+                        help="Use cached narration phrase bank with template fallback.")
     args = parser.parse_args()
+    if args.llm and args.narration_dir is None:
+        parser.error("--llm requires --narration-dir")
 
     pipeline = WorkoutPipeline(
         model_path=args.model,
@@ -85,7 +92,11 @@ def main() -> None:
 
     if args.export:
         result.save_json(args.export)
-        print(f"Results exported successfully to {args.export}")
+        print(f"Results exported successfully to {args.export}", file=sys.stderr)
+
+    if args.narration_dir:
+        from src.narration.integration import narrate_analysis
+        narrate_analysis(result, args.narration_dir, seed=args.narration_seed, use_bank=args.llm)
 
     if args.json:
         print(result.to_json())

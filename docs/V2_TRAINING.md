@@ -130,6 +130,10 @@ uv run --no-sync python -B main.py synth_v2_train_f0_0001 --show-gt
 uv run --no-sync python -B src/segmentation/predict_video.py synth_v2_train_f0_0001
 ```
 
+For the complete prediction -> rep counting -> scheduled audio recipe, see
+[END_TO_END.md](END_TO_END.md). The commands above produce text cues, not speech;
+the audio bridge consumes the exported predicted segments, not ground truth.
+
 Integration exports dataset/model provenance and the same 10-Hz temporal metrics
 as final evaluation when comparison is requested. It retains rule-based rep
 counting and narration; no rep thresholds were tuned in this compatibility work.
