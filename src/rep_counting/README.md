@@ -91,3 +91,19 @@ This selects and validates quality weights using training folds only, checks
 runtime agreement, and writes per-arm/segment CSVs, fold metrics, and diagnostic
 plots. It does not change defaults automatically or evaluate test features.
 See [results and diagnostic plots](../../docs/results/MOTION_ARM_SELECTION.md).
+
+## Experimental prominence/width peak counter
+
+The optional `src.rep_counting.peak_counter.count_peaks_for_exercise` API detects
+motion extrema and timestamps their recovery. `PeakSettings` controls prominence,
+minimum width, and capped autocorrelation-guided spacing. This does not replace
+the current state-machine default.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.validate_peak_counter --out-dir outputs/peak_counter/new_experiment
+```
+
+Training-only evaluation compares all three exercises across five source-disjoint
+folds, includes a no-autocorrelation ablation, matches completion times to annotated
+rep intervals, and writes diagnostic plots. See the
+[experiment report](../../docs/results/PEAK_COUNTER_EXPERIMENT.md).
