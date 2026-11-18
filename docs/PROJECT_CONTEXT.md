@@ -1,8 +1,10 @@
 # Active v2 construction protocol
 
+For current methods and the GT-window and post-segmentation CV/test results, see the [v2 pipeline results](results/V2_PIPELINE_RESULTS.md).
+
 ## Rep-counting alternatives: methods and results (17 November 2026)
 
-### Implemented logic and default status
+### Current default and historical experiments
 
 As of 18 November 2026, the pipeline adopts the frozen training-selected
 experimental counter combo as the default (`rep_method='experimental'`).
@@ -56,7 +58,7 @@ score. The guided settings selected on all training folds use prominence
 fraction 0.25 for squats/jumping jacks and 0.45 for push-ups, width 1/15 second,
 and spacing fraction 0.35. Per-held-out-fold choices are recorded separately.
 
-| Exercise | Current 2D state machine | Guided peaks | Unguided peaks |
+| Exercise | Legacy 2D state machine | Guided peaks | Unguided peaks |
 |---|---:|---:|---:|
 | Jumping jacks | 5.288 | 4.413 | 4.204 |
 | Push-ups | 2.865 | 2.981 | 2.827 |
@@ -101,7 +103,7 @@ Settings selected on the other four folds (peak candidates include both guidance
 ### Interpretation and reporting limits
 
 Guided peaks reduce jumping-jack MAE by 16.5% and squat MAE by 27.6% relative
-to the current untuned 2D state-machine baseline, but worsen push-ups by 4.0%.
+to the legacy untuned 2D state-machine baseline, but worsen push-ups by 4.0%.
 Unguided peaks are as good or better in those aggregate comparisons; added
 value from autocorrelation guidance is not established.
 
@@ -127,7 +129,7 @@ Existing detail/artifact records: [peak experiment](results/PEAK_COUNTER_EXPERIM
 [2D/3D settings, metrics, and hashes](results/signal_dimensions_20261117/report.json).
 Plots and per-segment prediction CSVs are linked from those existing reports.
 
-This dated section is the current rep-counter experiment record; older counter tables and workflow notes below are historical unless explicitly identified as current v2.
+The dated tables retain their original experiment scope. The pipeline results page records the current benchmark comparisons.
 
 ## Current full-flow handoff (17 November 2026)
 
@@ -135,17 +137,16 @@ Run instructions: [END_TO_END.md](END_TO_END.md). Current supported flow is
 registered v2 media + cached canonical pose features -> frozen all-train RF
 bundle -> smoothed exercise/transition segments -> fixed exercise-specific rep
 counter -> text cue export -> separate narration event/speech scheduler -> WAV.
-`main.py` does not synthesize audio. The runbook's API bridge uses predicted
+`main.py` emits text cues and optionally synthesizes audio with `--narration-dir`. The audio bridge uses predicted
 boundaries and absolute rep completion times, retains zero-rep exercises and
 omits transition segments from the exercise-only speech input. It does not use
 the legacy ground-truth narration demo or its old splits.csv loader.
 
 Deterministic templates and seed 42 are the default; an optional cached Gemini
-phrase bank changes wording only. gTTS needs network access for uncached text,
-and caches sentence MP3s. Scheduling may skip/delay cues and extend the track
-beyond video duration; output is narration-only WAV, not a muxed MP4. No speech
-quality or human-study result is claimed. This documentation update did not
-invoke external synthesis or generate new benchmark outputs.
+phrase bank supplies eligible wording. gTTS caches synthesized sentence MP3s.
+The scheduler uses measured durations to fit cues and the sign-off within the
+video. It writes a narration WAV and SRT. Optional burn-in creates a video
+copy with subtitles and narration audio.
 
 Model results are recorded in [V2_MODEL_RESULTS.md](results/V2_MODEL_RESULTS.md).
 The [single-video rep diagnostic](results/V2_FULL_VIDEO_REP_RESULTS.json) gave

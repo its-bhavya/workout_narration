@@ -1,5 +1,7 @@
 # V2 training, final evaluation, and integration
 
+For current methods and the GT-window and post-segmentation CV/test results, see the [v2 pipeline results](results/V2_PIPELINE_RESULTS.md).
+
 Implemented 17 November 2026. This change validates compatibility, not benchmark
 performance: models are fitted only on small synthetic unit-test fixtures.
 The real v2 benchmark receives a read-only feature/CV preflight. No production

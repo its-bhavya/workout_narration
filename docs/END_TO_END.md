@@ -1,6 +1,10 @@
 # Run segmentation, rep counting and narration
 
-Current flow, verified against the merged v2 code on 17 November 2026.
+The default rep counter uses 2D arm-raise peaks for jumping jacks, 2D hip-angle
+peaks for squats, and coordinate median voting for push-ups. Use
+`--rep-method state_machine` to reproduce the legacy counting path. See the
+[v2 pipeline results](results/V2_PIPELINE_RESULTS.md) for CV and test metrics.
+
 Run commands in PowerShell from the repository root.
 
 ## Supported input and prerequisites
@@ -75,21 +79,24 @@ Python callers can use `src.narration.integration.narrate_analysis(result, out_d
 with a `WorkoutAnalysisResult` or its exported mapping.
 
 Final outputs are `analysis.json`, `narration.json` (scheduled text, timing,
-delays and skipped events), and `narration.wav`. gTTS also stores reusable
+delays and skipped events), `narration.wav`, and `narration.srt`. gTTS also stores reusable
 sentence MP3s under `outputs/tts_cache/`; these are required synthesis cache,
 not additional experiment results. No per-window exports or temporary script
-files are needed. The WAV is a narration-only track: no command above creates
-a narrated MP4 or mixes the source video's sound. Open the WAV to listen; play
-it from time zero alongside the matching MP4 for a manual demonstration.
+files are needed. The WAV contains the narration track. Use the optional
+`--burn-in` command to create a video copy with audio and subtitles.
 
-Narration uses an offline view of the whole video. Cadence is chosen from
-1/2/3/5/10 using median rep spacing; not every rep is spoken. Ordinary rep cues
-can be skipped when busy; milestones more than two seconds late are skipped.
-Other important cues can be delayed. Later exercise announcements are scheduled at the next predicted exercise
-start, preserving intervening rest periods. Workout completion is scheduled at
-the full video duration, including trailing transitions. The final rep is intentionally not spoken separately.
-Audio can extend past video duration to finish the last phrase. Inspect the
-schedule report rather than assuming perfect audiovisual synchronization.
+Narration works offline from the predicted completion times. The speaking
+cadence is the smallest integer whose product with the median rep gap meets
+the cached p90 clip duration plus 0.3 seconds. With an empty cache, cadence
+uses a 1.9-second phrase estimate. Fast callouts use plain numbers and praise
+is reserved for milestones. Busy callouts and milestones more than two seconds
+late can be skipped. Transitions use the measured clip length and can start
+before the next exercise. The scheduler can include a missed final count in a
+closing cue when there is room. The workout sign-off and WAV end within the
+video duration. The schedule report records timings and skipped cues.
+
+To render the narrated copy, add `--burn-in` to the command that uses
+`--narration-dir`. The result is written to `check.mp4` in that directory.
 
 ## Optional cached LLM phrases
 

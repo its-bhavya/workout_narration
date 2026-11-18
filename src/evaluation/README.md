@@ -1,4 +1,6 @@
 # src/evaluation
+
+For current methods and the GT-window and post-segmentation CV/test results, see the [v2 pipeline results](../../docs/results/V2_PIPELINE_RESULTS.md).
 Owned by: Ishita (Role 3)
 Status: segmentation/count metric utilities are implemented. Active v2 rep-count
 runners in `src/rep_counting` now evaluate canonical predictions, synthetic
@@ -37,7 +39,7 @@ segments as zero counts, and compares fixed settings before separate tuning.
 
 Peak-family MAE with other-fold settings:
 
-| Exercise | Current 2D state machine | Guided peaks | Unguided peaks |
+| Exercise | Legacy 2D state machine | Guided peaks | Unguided peaks |
 |---|---:|---:|---:|
 | Jumping jacks | 5.288 | 4.413 | 4.204 |
 | Push-ups | 2.865 | 2.981 | 2.827 |
@@ -59,7 +61,7 @@ fold MAE. Precision is matched/predicted, recall is matched/annotated, and F1
 is their harmonic mean. WAPE is count error, not a detection-accuracy score.
 
 
-State-machine and peak defaults have not been changed based on these studies.
+These tables describe the earlier development experiments. The linked pipeline results identify the adopted counter and its separate CV and test scores.
 These are exploratory development comparisons, not unbiased nested-CV estimates
 or new final-test results. Upstream pose person selection is annotation-assisted.
 For complete logic, search spaces, coverage, timing tables, and commands see

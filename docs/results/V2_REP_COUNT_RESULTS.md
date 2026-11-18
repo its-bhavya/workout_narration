@@ -1,5 +1,7 @@
 # V2 synthetic test-set rep counting ? 17 November 2026
 
+This report preserves the original state-machine baseline. The [v2 pipeline results](V2_PIPELINE_RESULTS.md) include the local-adaptive follow-up, 2D peaks, and the current combination.
+
 All 21 indexed synthetic test videos were evaluated using the frozen all-train model and unchanged counter settings. No test tuning, retraining, or narration synthesis was performed.
 
 ## End-to-end segmentation ? counting

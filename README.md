@@ -1,56 +1,31 @@
 # V2 source-clip CV, evaluation and integration
 
+For current methods and the GT-window and post-segmentation CV/test results, see the [v2 pipeline results](docs/results/V2_PIPELINE_RESULTS.md).
+
 For a single video, follow [the end-to-end PowerShell runbook](docs/END_TO_END.md):
 registered v2 video/features -> frozen segmentation model -> per-segment rep
 counting -> text cues -> scheduled gTTS narration WAV. It includes the bridge
 from analysis JSON to audio, output locations and optional cached LLM phrases.
-Arbitrary new MP4 ingestion is still deferred; `main.py` alone exports text,
-not audio or a narrated MP4.
+The integrated flow uses registered v2 videos. Audio is optional via
+`--narration-dir`, and `--burn-in` adds speech and subtitles to a video copy.
 
 Current training/evaluation and integration guide: [V2_TRAINING.md](docs/V2_TRAINING.md).
 
-## Rep-counting alternatives: current findings (18 November 2026)
+## Current pipeline
 
-The integrated pipeline adopts the frozen experimental combo as the default
-rep counter (`rep_method='experimental'`: unguided arm-raise peaks for jumping
-jacks, unguided hip-angle peaks for squats, and frozen coordinate median
-voting for push-ups), while preserving the legacy 2D state machine via
-`rep_method='state_machine'`. Upstream segmentation is kept as is. Experimental
-peak counting detects prominent, sufficiently wide motion extrema, optionally uses
-capped autocorrelation-guided spacing, and timestamps recovery after the
-extremum. Cached world-3D angles are compared with 2D using the same signal
-cleaning and arm-selection rules; missing 3D columns cannot fall back to 2D.
+The integrated v2 pipeline uses the frozen random forest with 2-second windows,
+1-second stride, and OnlineTAS smoothing (tau=0.5, min_len=3). The default rep
+counter uses unguided 2D arm-raise peaks for jumping jacks, unguided
+confidence-weighted 2D hip-angle peaks for squats, and frozen coordinate
+median voting for push-ups. Use `--rep-method state_machine` for the legacy
+hysteresis counter.
 
-Five source-disjoint training folds evaluate 460 GT-window exercise segments.
-MAE averages source clips within each fold, then averages folds; it is not
-end-to-end test MAE. Peak-family settings are selected on the other four folds:
-
-| Exercise | Current 2D state machine | Guided peaks | Unguided peaks |
-|---|---:|---:|---:|
-| Jumping jacks | 5.288 | 4.413 | 4.204 |
-| Push-ups | 2.865 | 2.981 | 2.827 |
-| Squats | 1.594 | 1.153 | 1.150 |
-
-A separate paired 2D/3D study tunes parameters independently on other folds.
-Its peak search includes both guided and unguided settings:
-
-| Exercise | State machine 2D | State machine 3D | Peaks 2D | Peaks 3D |
-|---|---:|---:|---:|---:|
-| Jumping jacks | 4.562 | 4.913 | 4.435 | 5.414 |
-| Push-ups | 2.865 | 5.205 | 2.993 | 4.968 |
-| Squats | 1.370 | 0.928 | 1.197 | 0.992 |
-
-3D state-machine squats, 2D state-machine push-ups, and 2D peaks for jumping
-jacks are the strongest development combination here. It has not replaced
-the pipeline default. Guidance itself did not consistently beat unguided peaks.
-These are exploratory GT-window training results, not new test scores or an
-unbiased nested-CV estimate. Pose person selection remains annotation-assisted.
-
-Methods, fixed-settings results, tuning grids, and commands are documented in
-[the rep-counting README](src/rep_counting/README.md). Existing
-[peak](docs/results/PEAK_COUNTER_EXPERIMENT.md) and
-[2D/3D](docs/results/SIGNAL_DIMENSIONS_COMPARISON.md) reports retain plots,
-per-segment predictions, timing metrics, source hashes, and selected settings.
+Squat and jumping-jack counting reuse the cached angle features. Push-up
+voting derives three motion signals from raw pose coordinates in each
+predicted push-up window. Narration optionally turns the completion timestamps
+into duration-aware speech and subtitles, with audio bounded by the video.
+The earlier angle-only peak and state-machine results are retained in the
+[v2 pipeline results](docs/results/V2_PIPELINE_RESULTS.md).
 
 ## Data preparation and v2 protocol
 

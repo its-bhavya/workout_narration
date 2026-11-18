@@ -1,6 +1,6 @@
 # Cached 2D versus world-3D rep signals (17 November 2026)
 
-This experiment compares the current state-machine counter and the experimental
+This experiment compares the legacy state-machine counter and the experimental
 peak counter using existing 2D angles and MediaPipe world-landmark 3D angles.
 It does not run pose extraction, change production defaults, or load test feature
 frames. Estimated world-3D angles are not motion-capture ground truth.
@@ -14,7 +14,7 @@ the same smoothing, gap handling, visibility, motion-amplitude guards, arm-quali
 scoring rule, and minimum rep spacing. The selected arm can differ because
 motion quality is computed from the chosen dimensional signal.
 
-The first comparison holds counter settings fixed: current state-machine
+The first comparison holds counter settings fixed: legacy state-machine
 fractions/confirmation, and the previously selected guided-peak configuration
 for each exercise. These settings were previously developed on training data.
 The fixed comparison isolates changing the signal representation.

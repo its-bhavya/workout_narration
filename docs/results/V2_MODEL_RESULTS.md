@@ -1,5 +1,7 @@
 # V2 8-model comparison — 17 November 2026
 
+For the active segmenter summary, per-label segment counts, and rep-counter comparisons, see the [v2 pipeline results](V2_PIPELINE_RESULTS.md).
+
 Experiment: `cv8_v2_seed42_p080_20261117`. Status: complete.
 
 All 8 classifiers were compared using five source-clip folds inside train. Purity=0.8; seed=42; tau grid {0.4,0.5,0.6,0.7}; min_len grid {1,2,3,4}. Selection maximizes mean fold per-video Edit, then frame accuracy, using the documented deterministic ties. Test features were read only after selection and all-train refit.

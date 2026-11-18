@@ -1,5 +1,7 @@
 # Rep counting on v2 pose features
 
+For current methods and the GT-window and post-segmentation CV/test results, see the [v2 pipeline results](../../docs/results/V2_PIPELINE_RESULTS.md).
+
 Current training/evaluation and integration guide: [V2_TRAINING.md](../../docs/V2_TRAINING.md).
 
 ## Data preparation and v2 protocol
@@ -51,14 +53,14 @@ Ground-truth comparison is opt-in. Dataset run_id=v2 and experiment_id remain
 distinct, with input hashes and feature-schema checks. Model compatibility was
 verified on synthetic unit-test fixtures; this is not a new benchmark result.
 
-## Fixed v2 final-test evaluation
+## Historical state-machine test evaluation
 
 ```powershell
 uv run --no-sync python -m src.rep_counting.evaluate_final --out-dir outputs/rep_eval_v2/new_run
 ```
 
 Evaluates every indexed test video using the frozen segmentation model and current
-counter defaults. Records end-to-end video/exercise counts, video totals, and a
+state-machine configuration. Records end-to-end video/exercise counts, video totals, and a
 separate ground-truth-window counter diagnostic, with model/input hashes and
 settings. No calibration is performed; do not tune from test results. Existing
 output directories are preserved. See [recorded results](../../docs/results/V2_REP_COUNT_RESULTS.md).
@@ -94,13 +96,18 @@ See [results and diagnostic plots](../../docs/results/MOTION_ARM_SELECTION.md).
 
 ## Rep-counting alternatives: methods and results (17 November 2026)
 
-### Implemented logic and default status
+### Current default and historical experiments
 
-The default remains a rule-based hysteresis state machine on cleaned 2D
-angles: knee angles for squats, elbow angles for push-ups, and mean available
-arm-raise angles for jumping jacks. Push-ups use local six-second normalization
-and motion-aware arm selection. Peak counting and 3D counting are opt-in
-experiments; the pipeline has not adopted the best experimental combination.
+The integrated v2 pipeline uses the frozen random forest with 2-second windows,
+1-second stride, and OnlineTAS smoothing (tau=0.5, min_len=3). The default rep
+counter uses unguided 2D arm-raise peaks for jumping jacks, unguided
+confidence-weighted 2D hip-angle peaks for squats, and frozen coordinate
+median voting for push-ups. Use `--rep-method state_machine` for the legacy
+hysteresis counter.
+
+The 17 November development tables below use the earlier cleaned 2D
+state-machine baseline, including local push-up normalization and motion-aware
+arm selection. The 3D study is a separate experiment.
 
 The peak alternative reuses those cleaned signals and arm-selection rules.
 `scipy.signal.find_peaks` detects bend minima for squats/push-ups (invert the
@@ -146,7 +153,7 @@ score. The guided settings selected on all training folds use prominence
 fraction 0.25 for squats/jumping jacks and 0.45 for push-ups, width 1/15 second,
 and spacing fraction 0.35. Per-held-out-fold choices are recorded separately.
 
-| Exercise | Current 2D state machine | Guided peaks | Unguided peaks |
+| Exercise | Legacy 2D state machine | Guided peaks | Unguided peaks |
 |---|---:|---:|---:|
 | Jumping jacks | 5.288 | 4.413 | 4.204 |
 | Push-ups | 2.865 | 2.981 | 2.827 |
@@ -191,7 +198,7 @@ Settings selected on the other four folds (peak candidates include both guidance
 ### Interpretation and reporting limits
 
 Guided peaks reduce jumping-jack MAE by 16.5% and squat MAE by 27.6% relative
-to the current untuned 2D state-machine baseline, but worsen push-ups by 4.0%.
+to the legacy untuned 2D state-machine baseline, but worsen push-ups by 4.0%.
 Unguided peaks are as good or better in those aggregate comparisons; added
 value from autocorrelation guidance is not established.
 
@@ -250,7 +257,7 @@ The opt-in APIs are `peak_counter.count_peaks_for_exercise(..., settings=PeakSet
 and `compare_signal_dimensions.count_variant(..., dimensions="3d", method="state_machine",
 parameters=...)`. The latter expects canonical paired features; select parameters
 from the saved report rather than assuming all-training settings produced every
-held-out score. The integrated `WorkoutPipeline` still calls the default counter.
+held-out score. Use the documented pipeline CLI to select the legacy baseline or the currently integrated combination.
 At the dimensional experiment checkpoint, all 219 repository tests passed.
 
 ## Segment-local PCA plus peaks (17 November 2026)
@@ -1138,14 +1145,14 @@ this remains selection-CV, not unbiased nested CV. Both counters receive
 identical smoothed segments and 0.3 s end padding; GT windows are not used
 as counting boundaries.
 
-The current counter uses unchanged default 2D state machines. Experimental
+The comparison baseline uses the legacy 2D state machines. Experimental
 counting reuses prior other-four-fold settings: arm-raise peaks for jumping
 jacks, hip-angle peaks for squats and coordinate median voting for push-ups.
 No rep settings are selected or retuned against the new segmentation results.
 Different held-out folds may use different hyperparameters; this is a
 development-CV comparison, not a new score for the single tagged all-training
 test configuration. Method-family selection still reflects development
-inspection, and the default pipeline is not changed.
+inspection. This experiment predates adoption of the frozen combination.
 
 There are 154 predicted push-up windows requiring 77,816 unique stride-two
 coordinate frames. 69,263 raw pixel-landmark/visibility frames are reused

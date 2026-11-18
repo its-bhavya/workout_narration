@@ -2,7 +2,7 @@
 
 Implemented an opt-in offline repetition counter using prominence, minimum peak
 width, and conservative autocorrelation-guided spacing. The production
-state-machine default is unchanged. No test feature frames were evaluated.
+state-machine baseline reflects the default at the time of this experiment. No test feature frames were evaluated.
 
 ## Method
 
@@ -34,9 +34,9 @@ weight. These MAEs are different evaluation units and data from the previous
 21-video test results; they should not be compared directly to those test MAEs.
 
 Each peak family selects its settings on four training folds and scores the fifth.
-The baseline is the current counter including motion-aware push-up arm selection.
+The baseline is the legacy state-machine counter including motion-aware push-up arm selection.
 
-| Exercise | Current counter MAE | Guided peaks MAE | Unguided peaks MAE |
+| Exercise | State-machine MAE | Guided peaks MAE | Unguided peaks MAE |
 |---|---:|---:|---:|
 | Jumping jacks | 5.288 | 4.413 | 4.204 |
 | Push-ups | 2.865 | 2.981 | 2.827 |
@@ -93,7 +93,7 @@ configuration selected on all train, not independent validation evidence.
 
 - [Report, selected settings, fold checks, and source/input hashes](peak_counter_20261117/report.json)
 - [All candidate results](peak_counter_20261117/candidates.csv)
-- [Current counter predictions](peak_counter_20261117/baseline_segments.csv)
+- [State-machine predictions](peak_counter_20261117/baseline_segments.csv)
 - [Guided predictions selected on other folds](peak_counter_20261117/heldout_guided_segments.csv)
 - [Guided predictions selected on all train](peak_counter_20261117/selected_guided_segments.csv)
 

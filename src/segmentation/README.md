@@ -1,5 +1,7 @@
 # Segmentation: v2 source-clip CV
 
+For current methods and the GT-window and post-segmentation CV/test results, see the [v2 pipeline results](../../docs/results/V2_PIPELINE_RESULTS.md).
+
 Current training/evaluation and integration guide: [V2_TRAINING.md](../../docs/V2_TRAINING.md).
 
 Model selection now uses five train source-clip folds. Per-fold imputation
