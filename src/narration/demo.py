@@ -28,7 +28,7 @@ def main(clips=DEMO_CLIPS, render=True, noisy=False, llm=False):
         segments = perturb_segments(segments)
     tag = ("_noisy" if noisy else "") + ("_llm" if llm else "")
 
-    events = build_events(segments)
+    events = build_events(segments, align_starts=True, workout_end=total)
     timeline, skipped = build_timeline(events, use_bank=llm)
 
     for s in segments:

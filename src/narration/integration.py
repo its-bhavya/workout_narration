@@ -55,7 +55,8 @@ def narrate_analysis(analysis, output_dir, *, seed=42, use_bank=False,
     audio, report = output / "narration.wav", output / "narration.json"
     if audio.exists() or report.exists():
         raise FileExistsError("Narration outputs already exist; choose a new output directory")
-    events = build_events(segments, align_starts=True, workout_end=data["duration_s"])
+    duration = float(data["duration_s"])
+    events = build_events(segments, align_starts=True, workout_end=duration)
     options = {"seed": seed, "use_bank": use_bank}
     if synth is not None:
         options["synth"] = synth
@@ -66,7 +67,7 @@ def narrate_analysis(analysis, output_dir, *, seed=42, use_bank=False,
         from .render import render_track
         render = render_track
     output.mkdir(parents=True, exist_ok=True)
-    render(timeline, data["duration_s"], audio)
+    render(timeline, duration, audio)
     srt_file = output / "narration.srt"
     generate_srt(timeline, srt_file)
     result = {"video_id": data["video_id"], "run_id": data["run_id"],

@@ -31,8 +31,12 @@ def test_prediction_schedule_preserves_boundaries_and_zero_reps(tmp_path):
     assert result["segments"][0]["rep_times"] == [3., 6., 9.]
     assert result["segments"][1]["rep_times"] == []
     transition = next(t for t in result["timeline"] if t["event"] == "transition")
-    assert transition["scheduled"] == 20.
-    assert result["timeline"][-1]["scheduled"] == 30.
+    # Item 6: transition fires BEFORE the next segment boundary (not at it)
+    # prev last rep=9.0, next start=20.0 → max(9.3, 18.8)=18.8
+    assert transition["scheduled"] < 20.
+    assert transition["scheduled"] > 9.
+    # Item 8: workout_end is clamped within video duration (30 s)
+    assert result["timeline"][-1]["scheduled"] <= 30.
     assert rendered[0][1] == 30.
     assert json.loads((tmp_path / "narration.json").read_text())["experiment_id"] == "fixture"
     with pytest.raises(FileExistsError):

@@ -17,9 +17,12 @@ TEMPLATES = {
     ],
     "rep": [
         "{n}.",
-        "Nice, {n}.",
-        "{n}, keep it up.",
-        "Good, {n}.",
+        "{n} down.",
+    ],
+    # Used when cadence > 1 (fast exercise): plain numbers only — no prefix overhead
+    "rep_fast": [
+        "{n}.",
+        "{n}!",
     ],
     "milestone": [
         "{n} reps, great pace.",
@@ -27,13 +30,13 @@ TEMPLATES = {
         "{n} down, keep going.",
     ],
     "transition": [
-        "{prev} done. Next, {next}.",
-        "Nice work. Up next, {next}.",
-        "Great job. Now, {next}.",
+        "Next, {next}.",
+        "Up next, {next}.",
+        "Now, {next}.",
     ],
     "workout_end": [
-        "Great job on {exercise}. Workout complete.",
-        "{exercise} done. That's the workout, well done.",
+        "Workout complete.",
+        "Well done!",
     ],
 }
 
@@ -57,7 +60,7 @@ def load_templates(use_bank=False):
             return merged                      # corrupt bank -> fall back to templates
         for event, phrases in bank.items():
             # need 2+ phrases so the "never the same one twice in a row" logic works
-            if event in merged and isinstance(phrases, list) and len(phrases) >= 2:
+            if event in {"segment_start", "milestone", "workout_end"} and isinstance(phrases, list) and len(phrases) >= 2:
                 merged[event] = phrases
     return merged
 
@@ -71,13 +74,18 @@ class Narrator:
         self.templates = load_templates(use_bank)
 
     def say(self, event, **slots):
-        options = self.templates[event]
-        idxs = [i for i in range(len(options)) if i != self.last.get(event)]
+        # For rep events on fast cadences, use the compact plain-number template
+        event_key = event
+        if event == "rep" and slots.get("cadence", 1) > 1:
+            event_key = "rep_fast"
+        options = self.templates[event_key]
+        idxs = [i for i in range(len(options)) if i != self.last.get(event_key)]
         i = self.rng.choice(idxs)
-        self.last[event] = i
+        self.last[event_key] = i
         slots = dict(slots)
         for key in ("exercise", "prev", "next"):
             if key in slots:
                 slots[key] = SPOKEN_NAME.get(slots[key], slots[key].replace("_", " "))
+        # str.format ignores extra keys, so cadence/n/prev etc. in slots are safe
         text = options[i].format(**slots)
         return text[0].upper() + text[1:]
