@@ -252,3 +252,78 @@ parameters=...)`. The latter expects canonical paired features; select parameter
 from the saved report rather than assuming all-training settings produced every
 held-out score. The integrated `WorkoutPipeline` still calls the default counter.
 At the dimensional experiment checkpoint, all 219 repository tests passed.
+
+## Segment-local PCA plus peaks (17 November 2026)
+
+This opt-in experiment leaves input data, existing results, and production
+defaults unchanged. `pca_counter.py` projects ten explicitly allowed angle
+channels (both knees/elbows/hips/arm raises, leg spread, torso tilt) onto PC1.
+Only 2D angles or only actual world-3D angles are used in a projection; missing
+columns raise an error rather than falling back to another dimensional signal.
+Annotation labels, boundaries, IDs, and fold columns are excluded from PCA.
+
+Per segment, confidence below 0.5 masks observations. Channels need >=50%
+coverage and >=10 degrees of p10/p90 motion range; at least three channels are
+required. The existing short-gap cleaner and 0.3-second requested smoothing
+are applied. Retained channels are standardized, remaining missing cells use
+the channel mean in standardized space, and frames with <60% channel coverage
+are masked. PCA fits only adequate-coverage rows. PC1 scores are rescaled to
+unit standard deviation; explained variance, channel loadings, centers/scales,
+coverage, imputation fraction, and abstention reasons are exported.
+
+This is a bundled PCA-plus-preprocessing alternative, not an isolated PCA-only
+ablation of the earlier joint counter. A mean-imputed coordinate is not recovered
+physical motion, and missingness/posture changes can dominate a component.
+The largest-magnitude loading fixes the otherwise arbitrary PC sign. Peak
+polarity is selected on other training folds; a generic PCA recovery event is
+not guaranteed to correspond to anatomical rep completion. It must not drive
+narration without further phase validation.
+
+Each 2D/3D PCA variant searches 24 peak settings per exercise: absolute
+score-space prominence 0.5/1/1.5 (also at least 15% of local PC range), width
+1/15 or 2/15 seconds, autocorrelation spacing fraction 0 or 0.35, and polarity
++1 or -1. Degree-valued prominence defaults are not reused on PCA scores.
+The same missing-run separation and post-peak recovery logic is retained.
+Settings are selected on four source-disjoint training folds and evaluated on
+the fifth over the same 460 GT-window segments, with source-weighted fold MAE.
+PCA/scaling fit inside each individual segment without rep annotations;
+whole-segment lookahead makes this an offline experiment.
+
+| Exercise | Previous selected comparator MAE | PCA 2D + peaks | PCA 3D + peaks |
+|---|---:|---:|---:|
+| Jumping jacks | 4.435 | 4.580 | 4.781 |
+| Push-ups | 2.865 | 4.889 | 5.152 |
+| Squats | 0.928 | 1.109 | 0.899 |
+
+The previous selected comparators are the dimensional study's 2D peaks for
+jumping jacks (full peak search), 2D state machine for push-ups, and 3D state
+machine for squats. They were chosen from inspected development results, so
+this is exploratory comparison, not an independent test or unbiased nested CV.
+
+PCA worsens push-up counts and does not beat the previous selected jumping-jack
+counter on MAE. Squat PCA 3D slightly lowers count MAE (0.928 to 0.899, about
+3.1%), but rep-timing F1 falls from 95.97% to 95.22%; this is insufficient
+evidence to replace the simpler squat counter. Timing matches use the existing
+one-to-one interval matching with 0.3-second tolerance and pool reused segment
+occurrences, unlike source-weighted MAE. The default remains unchanged.
+
+No test feature frames were evaluated. Upstream pose selection remains
+annotation-assisted. Before/after SHA-256 verification confirmed all 245
+protected training input, manifest, and reference-result files were unchanged.
+Selected settings also matched the public API for all 920 segment/dimension
+projections. Synthetic tests additionally check input nonmutation, annotation
+exclusion, long gaps, visibility, strict 3D columns, and training-only access.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.validate_pca_counter --out-dir outputs/pca_counter/new_experiment
+```
+
+Existing output directories are preserved. The local run is under
+`outputs/pca_counter/verified_train_experiment_20261117/` (ignored by Git), containing
+[report/settings/hash verification](../../outputs/pca_counter/verified_train_experiment_20261117/report.json),
+[projection diagnostics](../../outputs/pca_counter/verified_train_experiment_20261117/projection_diagnostics.csv),
+[held-out predictions](../../outputs/pca_counter/verified_train_experiment_20261117/heldout_predictions.csv),
+and [comparison plot](../../outputs/pca_counter/verified_train_experiment_20261117/comparison.png).
+Three fixed first-segment examples show projected signals, channel motion, and
+annotated versus predicted recovery events. Existing reference results were
+read only; no data/features/model files were rewritten.
