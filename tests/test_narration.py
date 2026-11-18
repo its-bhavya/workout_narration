@@ -27,7 +27,14 @@ def test_milestones_slow_exercise():
 
 def test_milestones_fast_exercise():
     events = build_events([seg("jump_jack", 0.9, 32)])
-    assert ns(events, "milestone") == {10, 20, 30}
+    # Snapped to multiples of cadence (k=3): 10->9, 20->21, 30->30
+    assert ns(events, "milestone") == {9, 21, 30}
+    # Verify no plain rep event is emitted when milestone is emitted
+    assert not (ns(events, "milestone") & ns(events, "rep"))
+    # Verify all milestones and reps are multiples of cadence (k=3)
+    for ev in events:
+        if ev["type"] in ("rep", "milestone"):
+            assert ev["n"] % 3 == 0
 
 
 def test_last_rep_not_announced():

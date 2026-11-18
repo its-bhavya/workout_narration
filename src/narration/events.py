@@ -33,16 +33,21 @@ def build_events(segments, min_gap=MIN_SPOKEN_GAP_S, *, align_starts=False, work
 
         k = choose_cadence(seg["rep_times"], min_gap)
         seg["cadence"] = k
-        milestone_every = MILESTONE_EVERY if k == 1 else FAST_MILESTONE_EVERY
+        milestone_every = MILESTONE_EVERY if k in (1, 5) else FAST_MILESTONE_EVERY
         n_reps = len(seg["rep_times"])
+        # Milestones land only on multiples of cadence, snapping to nearest spoken count
+        milestone_reps = {
+            max(k, round(m / k) * k)
+            for m in range(milestone_every, n_reps + 1, milestone_every)
+        }
 
         for i, t in enumerate(seg["rep_times"], start=1):
-            milestone = i % milestone_every == 0
-            if i % k and not milestone:
+            if i % k != 0:
                 continue
             if i == n_reps:   # the transition / workout_end line covers the last rep
                 continue
-            events.append({"time": t, "type": "milestone" if milestone else "rep", "n": i})
+            is_milestone = i in milestone_reps
+            events.append({"time": t, "type": "milestone" if is_milestone else "rep", "n": i})
 
     if segments:
         last = segments[-1]

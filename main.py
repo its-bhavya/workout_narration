@@ -72,6 +72,8 @@ def main() -> None:
 
     parser.add_argument("--narration-dir", type=Path,
                         help="Synthesize narration.wav and narration.json from predicted segments.")
+    parser.add_argument("--burn-in", action="store_true",
+                        help="Burn subtitles and narration audio into check.mp4 (requires --narration-dir).")
     parser.add_argument('--rep-method',choices=['experimental','state_machine'],default='experimental',
                         help='Rep counter: frozen experimental combo (default), or legacy state machine.')
     parser.add_argument("--narration-seed", type=int, default=42)
@@ -80,6 +82,8 @@ def main() -> None:
     args = parser.parse_args()
     if args.llm and args.narration_dir is None:
         parser.error("--llm requires --narration-dir")
+    if args.burn_in and args.narration_dir is None:
+        parser.error("--burn-in requires --narration-dir")
 
     pipeline = WorkoutPipeline(
         model_path=args.model,
@@ -99,7 +103,11 @@ def main() -> None:
 
     if args.narration_dir:
         from src.narration.integration import narrate_analysis
+        from src.narration.burn_in import burn_in_video
         narrate_analysis(result, args.narration_dir, seed=args.narration_seed, use_bank=args.llm)
+        if args.burn_in:
+            check_path = burn_in_video(args.video, args.narration_dir)
+            print(f"Burned-in video written to {check_path}", file=sys.stderr)
 
     if args.json:
         print(result.to_json())
