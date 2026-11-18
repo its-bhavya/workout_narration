@@ -915,3 +915,214 @@ Artifacts (local, ignored by Git):
 All 246 tests pass; the six coordinate tests also pass after final validator
 updates. No test video/feature inference, canonical writes, commits or pushes
 were performed by this experiment.
+
+### Tagged freeze and second exploratory test evaluation
+
+The subsequent user-authorized freeze is commit
+`454144e0a59d9f1879f1bc493b11378e1a245ac1`, annotated tag
+`coordinate-voting-v1-20261118`, committed 18 November 2026 at 10:39:48 +05:30,
+before the new evaluation plan at 10:41:42 +05:30. No push was performed.
+The tracked `coordinate_voting_frozen.json` fixes the median family at 0.5 s
+smoothing, 0.2 s spacing, 0.35 relative prominence, 0.5 recovery and 1/15 s
+minimum width (candidate 187, best all-training setting within that family).
+Voters, quality fallback, extraction policy, code/model hashes, comparison
+policy and bootstrap seed are recorded in that file. The evaluator checks the
+tagged JSON and frozen implementation before inference; no retuning follows.
+
+Frozen-config training sensitivity uses every occurrence of the two largest
+previous-peak source-mean absolute errors, `stu9_51.mp4` and `stu9_50.mp4`.
+The same two source identities are excluded from both methods:
+
+| Training diagnostic | Previous peak source-weighted fold MAE | Frozen voting MAE |
+|---|---:|---:|
+| All 155 windows | 2.827 | 1.799 |
+| Excluding those two source clips | 2.432 | 1.718 |
+
+The frozen training MAEs are **in-sample**, distinct from the median-family
+other-fold-parameter estimate of 1.940. Mean signed window error changes from
+-0.677 to -0.452 reps. Under/exact/over window counts change from 59/52/44 to
+40/80/35. Nine previous undercounts and three previous exact windows become
+overcounts: reduced total overcounting does not imply no newly introduced
+overcounts. The two largest baseline misses change from -19/-18 reps to
+mean -3.5/-6.5 reps across their reused windows.
+
+The second evaluation reuses the saved frozen segmentation predictions from
+the first peak follow-up, with the same 0.3 s end padding. GT diagnostics have
+zero padding. Only the push-up counter changes; jumping jacks and squats
+retain the first follow-up's proposed frozen counters. Coordinates are freshly
+extracted with the tagged full-frame protocol independently in each window.
+The test set has already been inspected, including two coordinate-pilot cases;
+this is explicitly **a second exploratory evaluation**, not an untouched
+holdout. No settings were tuned on the new evaluation results.
+
+Paired 95% percentile bootstrap intervals use 10,000 video-cluster draws,
+seed 20261118, keeping both methods and all windows/classes within each
+sampled video together. Intervals describe new-minus-old MAE; negative favors
+voting. Only 21 videos are available, and source reuse may further reduce
+independence. Top-two test sensitivity excludes the previously diagnosed
+`stu9_52.mp4` and `stu4_46.mp4` from GT-window results only; headline scores
+retain all windows. No artificial source assignment is made to predicted
+segments crossing GT boundaries.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.evaluate_coordinate_frozen --out-dir outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118 --workers 2
+```
+
+This command refuses existing output directories. The one completed run's
+artifacts must be preserved rather than overwritten for a preferred result.
+
+#### Completed exploratory test results
+
+All 55 new pose windows completed once (28 predicted push-up windows and 27
+GT push-up windows). All 21 registered test videos remain in evaluation.
+Other exercises replay the first follow-up without modification. Canonical
+test videos/features/annotations, the frozen config/model and every previous
+test artifact passed unchanged-hash verification. No production defaults
+changed. The local freeze commit/tag are unchanged; the subsequent evaluator,
+analysis and documentation are recorded in a separate post-freeze commit.
+
+Both test runs, with the older comparator from the first run retained:
+
+| Counter result | JJ video MAE | Push-up video MAE | Squat video MAE | Overall video/exercise MAE |
+|---|---:|---:|---:|---:|
+| First run: previous unguided peaks | 2.714 | 4.381 | 2.381 | 3.159 |
+| First run: proposed cached peaks | 2.905 | 4.381 | 2.095 | 3.127 |
+| Second exploratory run: frozen coordinate voting for push-ups | 2.905 | 3.143 | 2.095 | 2.714 |
+
+Each exercise video MAE uses all 21 videos, including exercise-absent zeros;
+overall uses 63 video/exercise units. Paired changes below compare the second
+run with the first run's **proposed** counters:
+
+| Evaluation unit | First run MAE | Frozen run MAE | Change | Paired 95% CI for change |
+|---|---:|---:|---:|---:|
+| All 63 video/exercise totals, predicted segmentation | 3.127 | 2.714 | -0.413 | [-1.556, +0.429] |
+| Push-up totals, 21 videos, predicted segmentation | 4.381 | 3.143 | -1.238 | [-4.667, +1.286] |
+| Push-up totals, 11 active videos only | 8.364 | 6.000 | -2.364 | [-8.727, +2.455] |
+| Whole-workout totals, 21 videos | 7.762 | 6.905 | -0.857 | [-4.381, +2.000] |
+| Push-up GT windows, 27 windows | 3.778 | 2.481 | -1.296 | [-2.846, +0.520] |
+| All exercise GT windows, 79 windows | 2.165 | 1.722 | -0.443 | [-1.047, +0.171] |
+
+Point estimates improve, but every nonzero-change confidence interval includes
+zero. This does not establish a reliable population improvement. The push-up
+GT diagnostic has only 11 contributing video clusters; exercise-absent videos
+do not enter its bootstrap. GT and predicted-window MAEs are different units
+and must not be subtracted as an additive segmentation-error estimate.
+
+| Push-up count comparison | First run exact | Frozen exact | First run within +/-1 | Frozen within +/-1 |
+|---|---:|---:|---:|---:|
+| GT windows /27 | 13 (48.15%) | 15 (55.56%) | 16 (59.26%) | 19 (70.37%) |
+| All test videos /21 | 11 (52.38%) | 12 (57.14%) | 13 (61.90%) | 15 (71.43%) |
+| Active push-up videos /11 | 1 (9.09%) | 2 (18.18%) | 3 (27.27%) | 5 (45.45%) |
+
+Within-one includes exact matches. The all-video row includes ten push-up-
+absent videos that both methods count correctly as zero. Across all 63
+video/exercise units, exact changes 24/63 to 25/63 and within-one 37/63 to
+39/63. Whole-workout exact remains 0/21; within-one changes 2/21 to 3/21.
+
+| Push-up GT-window sensitivity | Windows | First run MAE | Frozen MAE |
+|---|---:|---:|---:|
+| Full diagnostic (headline unchanged) | 27 | 3.778 | 2.481 |
+| Without stu9_52 and stu4_46 | 25 | 1.760 | 1.760 |
+
+Outside these two previously diagnosed cases there is **no net MAE gain**;
+the paired difference CI is [-0.846, +1.429]. Their counts change 16 to 36
+(GT 57) and 28 to 47 (GT 45). These two cases explain the full 35-rep reduction
+in summed absolute GT error. The known pilot exposure makes this especially
+important when interpreting the exploratory improvement.
+
+Test GT under/exact/over windows change 7/13/7 to 7/15/5; mean signed error
+changes -1.778 to -1.222 reps. Two new overcounts occur. Notable regressions
+are stu10_44 (48 to 20, GT 40; error +8 to -20) and val901 (7 to 14, GT 7).
+In training, stu10_51 also worsens from 40 to 22 against GT 54. These failures
+remain included, and no settings are changed to repair them after evaluation.
+The evidence supports a promising outlier-specific improvement, not a robust
+general solution or automatic production adoption.
+
+Local artifacts:
+
+- [Tagged frozen config](coordinate_voting_frozen.json)
+- [First test run, preserved](../../outputs/peak_improvements/test_followup_20261118/report.json)
+- [Second run report, intervals and both sensitivities](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/report.json)
+- [Pre-inference plan and tag/commit provenance](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/evaluation_plan.json)
+- [Every training window's signed errors](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/training_window_signed_errors.csv)
+- [Every test push-up GT window's signed errors](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/gt_pushup_window_signed_errors.csv)
+- [Video/exercise count comparisons](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/video_exercise_comparison_counts_only.csv)
+- [All GT-window count comparisons](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/all_gt_window_comparison_counts_only.csv)
+- [Active-video and signed-transition supplement](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/supplement.json)
+- [Signed-error and confidence plots](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/signed_errors_and_confidence.png)
+
+The count-only exports avoid stale earlier-run auxiliary timing fields retained
+in raw replay comparison tables. Frozen push-up timelines are in the dedicated
+window files and sidecars; no frozen timing-F1 claim is made here. The supplement
+is derived without repeating pose inference or counting:
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.summarize_coordinate_frozen --run-dir outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118
+```
+
+All 250 tests pass, including paired-bootstrap sign/clustering, identical
+source-exclusion and raw missing-observation checks. The post-freeze commit
+is separate from the tagged freeze; nothing was pushed.
+
+#### Claim and per-clip failure analysis
+
+**Reporting claim:** In development, median voting over coordinate signals
+reduced source-weighted push-up MAE from 2.83 to 1.94. Side-on clips with
+missing elbow keypoints motivated this approach; the development comparison
+does not establish camera view as the cause of its gain. In a second
+exploratory evaluation on a previously seen test set, point estimates favored
+voting (GT-window MAE 3.78 to 2.48), but confidence intervals included zero
+and the net MAE gain disappeared when the two previously diagnosed clips were
+excluded. Both of those test clips were coarsely tagged side-on and had
+substantial missing canonical elbow observations. Their earlier pilot exposure
+limits the independence of this evidence.
+
+The **first frozen test evaluation** changed overall video/exercise MAE
+3.16 to 3.13 (previous versus proposed cached peaks). The **second exploratory
+test evaluation** changed 3.13 to 2.71 by replacing only push-ups with the
+tagged coordinate-voting config. These are separate evaluations, not two
+stages of an untouched test. Both remain in the table above; the second uses
+an already-seen set and its confidence intervals do not establish a gain.
+
+Eight largest absolute signed errors in the frozen push-up GT-window run
+(ties sorted by clip ID):
+
+| Clip | Coarse camera view | GT | Previous -> frozen count | Signed error, previous -> frozen | Missing old elbow | Missing frozen selected signal | Selected signal |
+|---|---|---:|---:|---:|---:|---:|---|
+| stu9_52 | Side, tight crop | 57 | 16 -> 36 | -41 -> -21 | 73.21% | 47.71% | Weighted elbows |
+| stu10_44 | Oblique, edited | 40 | 48 -> 20 | +8 -> -20 | 9.00% | 5.12% | Shoulder-to-wrist height |
+| val901 | Front, elevated support | 7 | 7 -> 14 | 0 -> +7 | 62.94% | 16.08% | Shoulder height |
+| train2748 | Front/oblique | 5 | 9 -> 9 | +4 -> +4 | 12.88% | 9.85% | Shoulder height |
+| stu4_45 | Oblique, edited | 16 | 21 -> 19 | +5 -> +3 | 0.12% | 0.12% | Weighted elbows |
+| stu5_47 | Side/oblique | 30 | 25 -> 27 | -5 -> -3 | 23.78% | 13.89% | Shoulder height |
+| stu8_45 | Front/oblique | 11 | 15 -> 8 | +4 -> -3 | 12.91% | 11.71% | Shoulder height |
+| stu4_46 | Side | 45 | 28 -> 47 | -17 -> +2 | 33.44% | 0.00% | Shoulder height |
+
+Camera tags come from the prior manual review of three sampled frames per
+window, not calibrated geometry or a full temporal audit. stu10_44 contains
+sampled cuts/pauses; stu4_45 includes talking/reset content; stu8_45 shows
+compound movement. These are observations, not established error causes or
+label corrections. Low missingness in stu10_44 and stu4_45 shows that failure
+is not explained by absent keypoints alone.
+
+Missing fraction is one minus the fraction of raw sampled signal values that
+are finite with finite model visibility/confidence >=0.5, before interpolation
+or smoothing. The old-elbow figure uses the saved canonical selected-arm raw
+coverage. The frozen figure describes the actual candidate timeline selected
+by median voting, not all voters; it mixes coordinate and angle channels and
+is not a controlled same-signal tracking comparison. Model confidence does
+not verify landmark accuracy, off-screen inference or subject identity.
+
+The [failure table CSV](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/largest_signed_error_failures.csv)
+also retains fresh left/right elbow missingness and review notes. Its
+[provenance](../../outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118/largest_signed_error_failures_provenance.json)
+records source checksums and definitions. It is derived without repeating
+inference/counting or changing the frozen configuration:
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.coordinate_failure_table --run-dir outputs/pushup_coordinates/exploratory_test_frozen_v1_20261118
+```
+
+The post-freeze evaluator, derived analyses, tests and reporting are committed
+separately after the tagged freeze, preserving freeze-first/evaluation-second
+history. No push is performed.
