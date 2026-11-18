@@ -116,7 +116,7 @@ def test_prediction_integration_parity_and_gt_independence(synthetic_bundle):
     assert pred.pred_label.tolist()==again[0].pred_label.tolist()
     assert segments==again[2] and end==24.
     pipeline=WorkoutPipeline(model_path=data['model'],windows_path=data['windows'],
-                             features_dir=data['features'],synth_dir=data['synth'])
+                             features_dir=data['features'],synth_dir=data['synth'],rep_method='state_machine')
     result=pipeline.analyze(vid)
     assert [(s.exercise,s.start_time,s.end_time) for s in result.segments]==[
         (s['exercise'],s['start_time'],s['end_time']) for s in segments]

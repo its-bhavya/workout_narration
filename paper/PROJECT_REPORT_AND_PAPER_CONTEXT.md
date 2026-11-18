@@ -418,6 +418,404 @@ selected signal, review notes and provenance. No inference or counting was
 repeated to derive the table. See the existing counter README for links and
 the reproduction command.
 
+## Full training-CV segmentation plus counting comparison
+
+All 120 training videos were scored with the selected RF's saved source-held-
+out OOF predictions and unchanged smoothing (tau 0.5, minimum run 3 windows).
+OOF hashes, training signature, complete window keys and `cv_fold == fold`
+were verified. Both counters receive identical predicted exercise segments
+and 0.3 s end padding. Current counting uses the default 2D state machines;
+experimental counting uses previous other-four-fold-selected arm-raise peaks,
+hip-angle peaks and coordinate median voting. No settings are tuned on these
+new end-to-end scores. Model/family/smoothing development choices still make
+this selection-CV, not an unbiased nested-CV estimate or pristine holdout.
+
+| Exercise / unit | Current MAE | Experimental MAE | Exact counts: current -> experimental | Within +/-1: current -> experimental |
+|---|---:|---:|---:|---:|
+| Jumping jacks /120 | 7.942 | 5.242 | 50 -> 40 | 71 -> 70 |
+| Push-ups /120 | 3.717 | 2.925 | 62 -> 62 | 71 -> 72 |
+| Squats /120 | 2.683 | 2.708 | 54 -> 46 | 71 -> 78 |
+| All video/exercise units /360 | 4.781 | 3.625 | 166 -> 148 | 213 -> 220 |
+
+Primary MAE averages video/exercise totals, including exercise-absent zeros;
+it is not source-weighted GT-window MAE. The experimental combination lowers
+MAE by 24.2%, but exact matches decline 46.11% to 41.11%, while within-one
+changes 59.17% to 61.11%. Squat MAE is effectively tied/slightly worse after
+segmentation, so the component GT-window advantage does not carry through
+uniformly. Overcounting units rise 82 to 119 and undercounting units fall
+112 to 93. Mean signed error improves -3.003 to -1.075. No new hybrid is
+selected from these results or promoted into production.
+
+Timing F1 improves JJ 0.8400 to 0.8840, push-ups 0.8678 to 0.9119, and squats
+0.8896 to 0.8948. Whole-video MAE changes 12.092 to 8.458, exact 7/120 to
+9/120 and within-one 31/120 to 30/120. Active-only JJ/push-up MAEs are
+9.490 to 6.190 (100 videos) and 6.862 to 5.385 (65 videos). Segmentation is
+identical: mean fold Edit 71.537, frame accuracy 85.109%, F1@25 0.7042.
+
+Descriptive paired video-cluster 95% intervals for experimental-minus-current
+MAE are overall -1.156 [-2.142, -0.381], JJ -2.700 [-5.375, -0.650], push-ups
+-0.792 [-1.575, -0.050], and squats +0.025 [-0.517, +0.684]. Training reuse
+and synthetic source repetition limit independence: these are not new test
+claims. This study uses different rep hyperparameters per held-out fold,
+not the single tagged all-training config used in the second exploratory
+test evaluation.
+
+The 154 predicted push-up windows require 77,816 raw coordinate frames;
+69,263 are reused from hash-verified training sidecars and 8,553 missing
+frames are extracted with the same frozen IMAGE/stride-two pose protocol.
+Only raw landmarks/visibility are reused; normalization and signals are
+recomputed per predicted window, including all wrongly classified regions.
+Canonical upstream features remain annotation-assisted. No test video or
+feature inference is run, and canonical data, previous results and defaults
+are unchanged.
+
+The final JSON export was repaired after counting completed: one segmentation
+boundary distance was infinite, so it is represented as null in JSON with
+raw infinity retained in CSV. Saved complete tables were finalized without
+repeating extraction or counting. Input/table hashes and evaluator/finalizer
+provenance are retained. Full results and per-segment timelines are under
+`outputs/pushup_coordinates/segmented_training_cv_20261118/`; reproduction
+and links are in the existing counter README. No commit or push was made
+for this follow-up.
+
+## Jumping-jack temporal failure classification
+
+Saved experimental OOF outputs were analyzed without rerunning segmentation,
+pose extraction or counting: 120 videos, 155 GT JJ windows, 146 predicted JJ
+windows. Signed video errors are 37 undercounts, 43 overcounts and 40 exact.
+Temporal flags overlap and describe associations, not exclusive causal error
+categories. With a descriptive 0.5 s boundary tolerance:
+
+| Video flag | All /120 | Under /37 | Over /43 | Exact /40 |
+|---|---:|---:|---:|---:|
+| Clipped GT JJ start/end | 21 | 16 | 3 | 2 |
+| Overlong predicted JJ window | 82 | 24 | 41 | 17 |
+| Fragmented GT JJ window | 4 | 4 | 0 | 0 |
+| Merged GT JJ windows | 3 | 1 | 2 | 0 |
+| GT JJ predominantly assigned another label | 19 | 18 | 1 | 0 |
+| Predicted JJ predominantly outside GT JJ | 3 | 2 | 1 | 0 |
+| Wholly missed GT JJ window | 12 | 11 | 1 | 0 |
+| False JJ in a JJ-absent video | 1 | 0 | 1 | 0 |
+
+Of 612 unmatched annotated repetitions, 402 (65.7%) have no predicted JJ
+window overlapping their interval, 22 (3.6%) have partial coverage, and 188
+(30.7%) have full coverage but no matched counted repetition. Among 195 extra
+predicted events, 109 timestamps lie inside GT JJ windows and 86 outside.
+Matching uses the existing class-aware one-to-one 0.3 s tolerance; coverage
+uses nominal windows, while counting retains 0.3 s end padding. Coverage
+does not prove pose/signal quality or causally allocate all errors.
+
+Missing/transition labels are a higher-priority association than fragmentation
+in these data. In f3_0002 and f3_0018, the same stu5_25 source has a 58.43 s
+GT JJ window but only a 4 s predicted JJ window (6.85% coverage); the dominant
+predicted label is transition. Video errors are -66 and -62. These reused
+source cases are not independent evidence. Conversely f1_0001/val568 has
+GT 136.97-146.77 s (9.80 s), predicted JJ 136.50-146.50 s (10 s), but counts
+19 against GT 55; its saved GT-window counter error is also -36. Thus counter
+failures remain even when boundaries are close. In f2_0008, a predicted JJ
+window 0-8.5 s has dominant GT label transition and produces ten false reps
+despite no GT JJ in that video. The overlong flag occurs in 41/43 overcounting
+videos but also 17 exact videos; trimming is not thereby proven to fix them.
+Four erroneous videos have no listed temporal flags.
+
+Full unthresholded GT/predicted starts, ends, lengths, boundary deltas,
+predicted labels, all intersections, signed video errors and rep-event
+classification are retained under
+`outputs/pushup_coordinates/jumping_jack_window_failures_20261118/`.
+The timeline figure shows the six largest absolute video errors. Maximum-
+overlap matching is descriptive rather than one-to-one; all overlap pairs
+are exported to retain fragmented/merged and wrong-label relationships.
+GT-window event-allocated errors assign saved timestamps by GT interval;
+outside-GT events remain in video totals, and this is not a GT-window rerun.
+Inputs/results passed unchanged-hash checks. The existing counter README
+contains reproduction commands, precise definitions and local artifact links.
+No settings, labels, defaults, commits or pushes were changed.
+
+## Segmentation branch: OOF per-class and transition diagnostics
+
+On `experiments/segmentation_improvement`, saved source-held-out RF outputs
+were diagnosed without new fitting, pose extraction, counting or test
+evaluation. OOF checksum, training signature, complete window keys and fold
+identity were verified; the experimental counter and default segmenter stay
+unchanged. One diagnostic module and its test file were added. Existing
+uncommitted development work was preserved; no commit or push was made.
+
+For 14,879 OOF windows, with GT rows and predicted columns, final smoothed
+confusion is:
+
+| GT / predicted | JJ | Push-up | Squat | Transition |
+|---|---:|---:|---:|---:|
+| JJ | 3367 | 16 | 122 | 333 |
+| Push-up | 13 | 4594 | 2 | 195 |
+| Squat | 37 | 5 | 3821 | 247 |
+| Transition | 159 | 477 | 255 | 1236 |
+
+| Class | Raw window recall | Smoothed window recall | Smoothed precision | Smoothed F1 |
+|---|---:|---:|---:|---:|
+| JJ | 82.52% | 87.73% | 94.16% | 90.83% |
+| Push-up | 89.36% | 95.63% | 90.22% | 92.85% |
+| Squat | 89.93% | 92.97% | 90.98% | 91.96% |
+| Transition | 57.40% | 58.11% | 61.46% | 59.74% |
+
+These pooled majority-GT-window statistics include mixed boundaries and are
+not the official equal-fold per-video 10 Hz frame metrics. Raw high-purity
+JJ-window recall remains 82.31%. Exact temporal-overlap JJ recall changes
+82.43% to 87.39%; all raw/final matrices and per-fold recalls are retained.
+Of raw JJ classification errors, 505/671 (75.3%) go to transition, 162 to
+squat, four to push-up. After smoothing, transition accounts for 333/471
+(70.7%) JJ window errors.
+
+In the same 19 previously identified failed JJ windows/videos (nine reused
+source clips), final duration-dominant labels are **13 transition, four squat,
+two push-up**. Raw labels are 11 transition, four squat and four JJ. One of
+the four raw-JJ cases becomes transition during confidence handling, three
+at minimum-run handling. The two final push-up cases were raw-transition-
+dominant, subsequently changed by the sandwich merge, not raw RF JJ-to-push-up
+mistakes. There is therefore a primary transition-class/context issue and
+a smaller squat-discrimination issue; this is a diagnostic prioritization,
+not causal feature attribution or a proven fix.
+
+The existing confidence rule exempts transition predictions from low-confidence
+forward-fill; 39.2% of raw JJ-to-transition windows have max probability below
+0.5. Minimum-run handling similarly exempts transition while suppressing short
+exercise runs. The final sandwich rule merges transitions between matching
+exercises with no duration cap. It recovers 266 GT-JJ-majority window labels
+overall, but converts 16 to push-up in the two affected cases. JJ temporal
+recall across stages is 82.43%, 81.89%, 80.53%, 87.39%: smoothing helps
+overall despite harm in the selected 19-video cohort (47.94% to 46.03% JJ
+temporal recall). Removing all smoothing is not supported by this evidence.
+Grouped-CV ablation of transition/context rules is justified before assuming
+that all misses require more discriminative pose features.
+
+Full diagnostics and the per-case stage table are under
+`outputs/segmentation_v2/diagnostics/oof_classes_20261118/`. The existing
+[segmentation README](../src/segmentation/README.md) contains raw and smoothed
+matrices, precise units, artifact links and the reproduction command. All
+source inputs and prior results were verified unchanged. These remain
+development selection-CV diagnostics on an error-selected cohort.
+
+## Periodicity/context feature ablation on grouped training CV
+
+On `experiments/segmentation_improvement`, four predeclared RF feature groups
+were fitted with the same five source-disjoint folds. RF hyperparameters
+(200 balanced trees, seed 42), training purity >=0.8, imputation protocol and
+smoothing tau 0.5/minimum run 3 are fixed. No audit-flagged examples are dropped.
+There is no new classifier/smoothing search or test inference. The baseline
+refit reproduces saved OOF labels/probabilities and the downstream 5.2417 JJ
+MAE before comparison. Fold-specific experimental JJ counter settings are
+unchanged for all groups; only predicted segmentation changes.
+
+The periodicity group adds three features on each of six 2D channels
+(left/right arm raise, ankle spacing, left/right hip, selected knee): dominant
+positive frequency, spectral-power fraction in 1-3 Hz, and positive local
+autocorrelation peak height. These use the original 2 s window, linear
+detrending, Hann periodogram and ACF peak search over 1/6-1.5 s lags. At least
+12 samples and a finite run covering 80% of the window are required; long
+missing runs are not bridged and unavailable features remain NaN for fold-
+fitted imputation. The baseline short-gap preprocessing is unchanged. Context
+adds the existing 112 summary features over centered 8 s intervals at the
+same 1 s stride, clipped only at video edges. Context uses future lookahead
+and may cross synthetic exercise boundaries within a video; no GT boundary
+or label is used as a model feature. This is an offline method.
+
+| Feature group | Features | Edit mean +/- fold SD | Mean fold frame accuracy | Mean fold F1@25 | Pooled JJ temporal recall | Fixed-counter JJ video MAE |
+|---|---:|---:|---:|---:|---:|---:|
+| Baseline | 112 | 71.537 +/- 2.898 | 85.109% | 0.7042 | 87.395% | 5.242 |
+| + Periodicity | 130 | 69.832 +/- 2.632 | 86.288% | 0.7121 | 92.215% | 4.300 |
+| + Context | 224 | 71.453 +/- 1.320 | 85.602% | 0.7306 | 88.390% | 5.092 |
+| + Both | 242 | 70.806 +/- 2.662 | 86.237% | 0.7261 | 90.592% | 4.183 |
+
+Periodicity alone gives the best JJ recall; context alone gives the best
+F1@25 and transition recall (56.16% baseline to 60.78%). Both gives the
+lowest JJ count MAE (20.2% lower), but no group exceeds baseline Edit. Exact/
+within-one JJ video counts are baseline 40/70, periodicity 42/71, context
+41/72, both 39/70, each over 120 videos including absent-JJ zeros. Best MAE
+does not imply better exact counts. Push-up/squat/transition temporal recall
+with both is 94.99%/92.28%/60.01%, versus 95.75%/93.11%/56.16% baseline.
+No feature group uniformly dominates, and the active segmenter is unchanged.
+
+In the original error-selected 19 windows, dominant JJ labels are restored
+in five by periodicity, none by context alone and three by both. Remaining
+both-group errors are nine transition, six squat and one push-up. In the
+motivating f3_0002/stu5_25 case, JJ coverage rises 6.85% to 94.12% with
+periodicity and 97.49% with both; video JJ count changes 8 to 62/64 against
+GT 74. Context alone gives 13.69% coverage and count 12. This is inspected,
+reused development evidence, not independent confirmation. Combined-group
+JJ MAE improves fold 3 from 12.250 to 6.125, but worsens fold 1 from 4.667 to
+5.667 and fold 0 from 3.917 to 4.167.
+
+All 20 fits and 266 tests complete; code/input hashes pass unchanged checks.
+Outputs, per-fold/video metrics, feature schemas, all OOF probabilities,
+class confusion and unchanged-counter JJ counts/timestamps are retained under
+`outputs/segmentation_v2/experiments/periodicity_context_20261118/`. See the
+existing segmentation README for reproduction and links. One opt-in module
+and one test file are added; no fold models are activated or persisted.
+Canonical data, active production bundle, smoothing/counter defaults, prior
+results and test data remain unchanged. Development fold reuse, coarse 2 s
+frequency resolution, signal harmonics and context lookahead limit claims.
+These are ablations, not unbiased nested CV or a new test result. No commit
+or push is made.
+
+## All-class counting check for the segmentation feature ablation
+
+The JJ-only count report was completed with push-up/squat counts on the same
+saved feature-ablation OOF predictions. All fold-specific experimental counter
+parameters and 0.3 s padding remain fixed. The reference is experimental
+combo MAE 3.625 with original segmentation, not the default state machine.
+All 120 videos/360 video-exercise units remain included; no new fitting,
+audit exclusions, hyperparameter selection or test inference is performed.
+
+| Segmenter feature group | JJ count MAE | Push-up count MAE | Squat count MAE | Overall count MAE |
+|---|---:|---:|---:|---:|
+| Baseline | 5.242 | 2.925 | 2.708 | 3.625 |
+| + Periodicity | 4.300 | 3.067 | 2.367 | 3.244 |
+| + Context | 5.092 | 2.642 | 2.625 | 3.453 |
+| + Both | 4.183 | 2.592 | 2.975 | 3.250 |
+
+The all-class check does **not** establish no regressions. Periodicity-only
+worsens push-up MAE (2.925 to 3.067); both worsens squat MAE (2.708 to 2.975)
+in every fold. Periodicity-only push-up recall improves 95.75% to 95.89%, but
+squat recall declines slightly 93.11% to 93.09% and transition recall declines
+56.16% to 55.47%. Both has push-up/squat recall 94.99%/92.28%, below baseline
+95.75%/93.11%. Context-only lowers aggregate count MAE for all classes, but
+its push-up/squat recall also declines. Counting and segmentation recall do
+not move monotonically together; mean improvements are not uniform wins.
+
+Periodicity-only JJ MAE by fold is baseline/new: fold 0 3.917/3.917, fold 1
+4.667/5.667, fold 2 2.375/2.167, fold 3 12.250/6.625, fold 4 3.000/3.125.
+Thus **two of five improve, one ties, two worsen**, with the principal gain
+in fold 3. Overall three-class MAE has the same 2/1/2 pattern. Edit worsens in
+all five folds; frame accuracy and F1@25 improve in three each. Periodicity's
+aggregate squat-MAE gain comes from one improved fold despite four worsening.
+These concentration checks preclude a claim of consistent improvement.
+
+Descriptive paired-video overall-MAE change intervals are periodicity -0.381
+[-0.969, +0.114], context -0.172 [-0.411, +0.067], both -0.375 [-0.908, +0.075].
+All include zero; development reuse and repeated synthetic source clips
+limit independence. Overall exact/within-one counts over 360 units are
+baseline 148/220, periodicity 146/221, context 145/227 and both 144/226.
+No active-model replacement or new independent-test claim follows.
+
+The completion helper reuses 78,094 raw pose frames and extracts only 2,267
+missing frames in 47 runs, with unchanged coordinate-extraction protocol.
+An empty-cache numeric-dtype issue was repaired after extraction; counting
+resumed from saved coordinates without repeating pose inference or changing
+the counter. Original plan and resume provenance are retained separately.
+Full class comparisons, per-fold metrics, counts and segment timelines are
+under `outputs/segmentation_v2/experiments/periodicity_context_all_counts_20261118/`.
+The existing segmentation README contains reproduction and links. All 268
+tests pass. Canonical inputs, earlier outputs, frozen counter parameters and
+the active segmenter are unchanged. No commits or pushes are made.
+
+## Exercise-first transition rejection selected by count MAE
+
+A predeclared one-parameter gate was evaluated on the saved baseline-feature
+RF OOF probabilities. It selects the largest original (unnormalized)
+probability among three exercises and calls transition only when that value
+is below threshold; the transition probability does not compete in argmax.
+No RF retraining or feature changes are involved. The gate replaces confidence
+forward-fill, avoiding a second 0.5 cutoff; fixed minimum-run 3 and sandwich
+merge rules remain. All experimental counters and 0.3 s padding are unchanged.
+
+Thresholds 0-1 inclusive in 0.05 steps are selected by equal-fold mean
+end-to-end video/exercise count MAE over all 360 units, not transition F1.
+Ties prefer higher thresholds. All 120 original videos are retained. The
+union requires 101,088 raw coordinate frames; 81,963 are reused and 19,125
+missing frames are extracted consistently in 135 runs. Identical predicted
+segments share cached count results across thresholds.
+
+**None of 21 thresholds beats the original 3.625 counting MAE.**
+
+| Policy | JJ MAE | Push-up MAE | Squat MAE | Overall MAE |
+|---|---:|---:|---:|---:|
+| Original transition argmax + smoothing | 5.242 | 2.925 | 2.708 | 3.625 |
+| Gate 0.00 | 4.558 | 4.525 | 3.267 | 4.117 |
+| Gate 0.30 (best JJ) | 4.208 | 3.975 | 2.883 | 3.689 |
+| Gate 0.55 (best all-OOF overall) | 6.083 | 2.683 | 2.242 | 3.669 |
+| Other-fold-selected thresholds | 6.025 | 2.950 | 3.250 | 4.075 |
+
+The all-OOF selected score is selection-biased. The other-four-fold threshold
+diagnostic chooses 0.30 for folds 0/2/4 and 0.55 for folds 1/3; every target
+fold is worse than the original policy (MAEs 3.597, 4.611, 2.250, 6.208,
+3.708). It is not strict nested CV: the underlying development choices were
+already inspected and other-fold OOF predictors had included the target fold
+in their fitting sets. Paired-video overall changes are +0.044 [-0.322,
++0.411] for all-OOF selection and +0.450 [+0.150, +0.789] for other-fold
+selection; synthetic source reuse and development selection limit inference.
+
+The cost tradeoff is real. Original JJ recall/overcount videos/overcount-plus-
+overlong videos are 87.39%/43/41, versus 91.22%/50/47 at threshold zero,
+90.25%/48/44 at 0.30, and 83.40%/34/30 at 0.55. Counter safeguards do not
+reject all false exercise regions. At 0.55 overall overcount/undercount units
+change 119/93 to 98/109 and exact/within-one 148/220 to 153/221, but signed
+bias worsens -1.075 to -1.875 and MAE does not improve. Edit improves 71.537
+to 73.719, while F1@25 is near unchanged 0.7042 to 0.7037; these secondary
+scores do not replace the specified count objective. Structural smoothing
+means final boundaries/recall need not change monotonically with threshold.
+At 0.30 push-up/squat temporal recall rises 95.75%/93.11% to 97.23%/95.94%,
+so recall gains across all exercises still do not imply a counting gain.
+
+This is a retained negative result for a single global exercise gate on this
+baseline model, not proof that every recall-biased decision rule must fail.
+The original policy remains active. Full sweep, all-class recall, candidate
+segments, count timelines and selection/provenance records are under
+`outputs/segmentation_v2/experiments/exercise_gate_counts_20261118/`; precise
+definitions and links are in the existing segmentation README. All 271 tests
+pass; canonical inputs, prior results, counters and active model are unchanged.
+No test inference, activation, commit or push was performed.
+
+## Baseline JJ rate/duration audit and error concentration
+
+The existing automatic audit is completed with overall three-class count
+MAE, using original OOF segmentation and fixed experimental counters (overall
+3.625, JJ 5.242). No inference/counting is rerun. Rate is GT count divided by
+window duration. The requested <1 or >4 Hz rule flags 77/155 windows from
+33 sources across 60 videos: 75 below 1 Hz and two val568 occurrences above
+4 Hz (55/9.8 s = 5.612 Hz). This objectively reproducible flag is a review
+heuristic, not proof of label error. Slow valid motion remains possible.
+
+All durations repeat through intentional source reuse; no annotations share
+video/start/end. Distinct clips stu7_28 (10 reps) and train1678 (11 reps)
+share 9.533333 s duration, each reused twice in four additional videos.
+Equal durations with different counts do not establish duplicate labels.
+Rate/duration union flags cover 64 videos, all explicitly listed in artifacts.
+
+| Cohort | Videos | Overall MAE | JJ MAE | Overall/JJ median absolute error |
+|---|---:|---:|---:|---:|
+| Full original data | 120 | 3.625 | 5.242 | 1 / 1 |
+| Without rate-flagged videos | 60 | 3.139 | 3.500 | 1 / 1 |
+| Without cross-source-duration flags | 116 | 3.693 | 5.371 | 1 / 1 |
+| Without union flags | 56 | 3.244 | 3.643 | 1 / 1 |
+
+Exclusions remove entire videos from all three class rows, only as sensitivity
+analyses; primary labels/scores stay unchanged. Unflagged cohorts retain 20
+JJ-absent videos. Active-only JJ MAEs are 6.190 (100 videos) original, 5.000
+(40) without rate flags, 5.389 (36) without union flags. Cohort changes and
+absent-class zeros preclude a causal label-correction interpretation.
+
+Ranked by absolute JJ video error with lexical-ID ties, top five contribute
+225/629 absolute error (35.8%), or 1.875 of the 5.242 MAE; top ten contribute
+337/629 (53.6%), or 2.808 MAE. They contain 231/612 missed reps (37.7%) and
+352/612 (57.5%), with audit overlap 4/5 and 7/10. Remaining JJ MAEs are 3.513
+over 115 videos and 2.655 over 110. Median absolute error remains 1 rep,
+including active-only JJ and both top-error exclusions. Ranking by missed
+reps instead gives 234/356 misses (38.2%/58.2%).
+
+Top-ten video suffixes/signed errors are f3_0002 -66, f3_0018 -62, f1_0001 -36,
+f3_0021 -31, f3_0016 -30, f1_0016 -26, f3_0012 -26, f4_0002 -26,
+f3_0010 -17 and f3_0017 -17. Unflagged among these are f3_0021, f3_0012 and
+f3_0017. The two worst videos' heavily missed stu5_25 source is unflagged
+(1.164 Hz); video flags come from other clips, stu3_21 (0.759 Hz) and
+train1614 (0.982 Hz). Video-level overlap does not prove that annotation
+errors caused the large misses, and reused sources are not independent cases.
+
+Full lists/rates/reasons, concentration and sensitivity are retained under
+`outputs/pushup_coordinates/jj_segmentation_audit_20261118/`.
+`overall_completion.json` adds derived overall numbers and input hashes
+without overwriting the original audit. The existing segmentation README
+contains links and the complete top-ten table. No code/model/counter changes,
+canonical writes, commits or pushes are made for this completion.
+
 ## Current full-flow implementation and reporting scope
 
 Runnable instructions: [END_TO_END.md](../docs/END_TO_END.md). The supported

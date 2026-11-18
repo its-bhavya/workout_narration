@@ -9,10 +9,14 @@ not audio or a narrated MP4.
 
 Current training/evaluation and integration guide: [V2_TRAINING.md](docs/V2_TRAINING.md).
 
-## Rep-counting alternatives: current findings (17 November 2026)
+## Rep-counting alternatives: current findings (18 November 2026)
 
-The state-machine counter remains the integrated default. Experimental peak
-counting detects prominent, sufficiently wide motion extrema, optionally uses
+The integrated pipeline adopts the frozen experimental combo as the default
+rep counter (`rep_method='experimental'`: unguided arm-raise peaks for jumping
+jacks, unguided hip-angle peaks for squats, and frozen coordinate median
+voting for push-ups), while preserving the legacy 2D state machine via
+`rep_method='state_machine'`. Upstream segmentation is kept as is. Experimental
+peak counting detects prominent, sufficiently wide motion extrema, optionally uses
 capped autocorrelation-guided spacing, and timestamps recovery after the
 extremum. Cached world-3D angles are compared with 2D using the same signal
 cleaning and arm-selection rules; missing 3D columns cannot fall back to 2D.

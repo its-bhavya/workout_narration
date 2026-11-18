@@ -8,3 +8,6 @@ data/_archive_v1/** -text whitespace=cr-at-eol
 
 # Result snapshots carry recorded hashes; preserve their original bytes.
 docs/results/** -text whitespace=cr-at-eol
+
+# Counter source files carry recorded sha256 checksums in coordinate_voting_frozen.json; preserve LF
+src/rep_counting/*.py text eol=lf

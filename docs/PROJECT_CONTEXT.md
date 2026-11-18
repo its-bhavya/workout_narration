@@ -4,11 +4,13 @@
 
 ### Implemented logic and default status
 
-The default remains a rule-based hysteresis state machine on cleaned 2D
-angles: knee angles for squats, elbow angles for push-ups, and mean available
-arm-raise angles for jumping jacks. Push-ups use local six-second normalization
-and motion-aware arm selection. Peak counting and 3D counting are opt-in
-experiments; the pipeline has not adopted the best experimental combination.
+As of 18 November 2026, the pipeline adopts the frozen training-selected
+experimental counter combo as the default (`rep_method='experimental'`).
+This combination uses unguided arm-raise peaks for jumping jacks, unguided
+hip-angle peaks for squats, and frozen coordinate median voting for push-ups.
+The legacy rule-based hysteresis state machine remains available via
+`rep_method='state_machine'`. Upstream segmentation (windowing, classifier,
+and OnlineTAS smoothing) remains unchanged.
 
 The peak alternative reuses those cleaned signals and arm-selection rules.
 `scipy.signal.find_peaks` detects bend minima for squats/push-ups (invert the

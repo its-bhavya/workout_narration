@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Any
 
@@ -10,6 +11,7 @@ import pandas as pd
 from workflow import load_bundle, bundle_smoothing, infer_frame, verify_bundle_training
 from ..segmentation.config import WINDOWS_CSV, FEATURES_DIR, SYNTH_DIR
 from ..rep_counting.rep_counter import count_for_exercise
+from ..rep_counting.default_counter import ExperimentalCounter
 from ..segmentation.metrics import all_metrics, gt_from_json
 from .extractor import load_ground_truth_if_available, resolve_features_input
 from .models import (
@@ -28,7 +30,7 @@ class WorkoutPipeline:
     Connects:
     1. Video pose angles input
     2. Temporal window classification & OnlineTAS smoothing (Segmentation)
-    3. Per-segment hysteresis state-machine rep counting (Rep Counting)
+    3. Frozen peaks/coordinate-voting rep counting (state machine optional)
     4. Narration timeline cue generation (Narration Engine Interface)
     """
 
@@ -42,7 +44,11 @@ class WorkoutPipeline:
         windows_path: Path = WINDOWS_CSV,
         features_dir: Path = FEATURES_DIR,
         synth_dir: Path = SYNTH_DIR,
+        rep_method: str = 'experimental',
     ) -> None:
+        if rep_method not in ('experimental','state_machine'):
+            raise ValueError("rep_method must be 'experimental' or 'state_machine'")
+        self.rep_method=rep_method
         self.end_pad_s = end_pad_s
 
         self.features_dir=Path(features_dir)
@@ -62,6 +68,7 @@ class WorkoutPipeline:
         video_input: str | Path | pd.DataFrame,
         video_id: str | None = None,
         show_gt: bool = False,
+        coordinate_features: pd.DataFrame | None = None,
     ) -> WorkoutAnalysisResult:
         """Run the full integrated pipeline on a multi-exercise workout video.
 
@@ -92,73 +99,79 @@ class WorkoutPipeline:
         total_exercise_duration = 0.0
         total_transition_duration = 0.0
 
-        for idx, seg in enumerate(predicted_segments):
-            exercise = seg["exercise"]
-            start_s = float(seg["start_time"])
-            end_s = float(seg["end_time"])
-            duration_s = max(0.0, end_s - start_s)
-            is_exercise = exercise != "transition"
+        session=(ExperimentalCounter(self.synth_dir/meta['split']/f'{vid}.mp4',meta['fps'],meta['n_frames'],coordinate_features)
+                 if self.rep_method=='experimental' else nullcontext(None))
+        with session as experimental:
+            for idx, seg in enumerate(predicted_segments):
+                exercise = seg["exercise"]
+                start_s = float(seg["start_time"])
+                end_s = float(seg["end_time"])
+                duration_s = max(0.0, end_s - start_s)
+                is_exercise = exercise != "transition"
 
-            if not is_exercise:
-                total_transition_duration += duration_s
-                seg_res = SegmentResult(
-                    segment_index=idx,
-                    exercise=exercise,
-                    start_time=start_s,
-                    end_time=end_s,
-                    duration_s=duration_s,
-                    is_exercise=False,
-                    rep_count=0,
-                    rep_times=[],
-                    flag="transition",
-                )
-            else:
-                total_exercise_duration += duration_s
-                exercise_durations[exercise] = exercise_durations.get(exercise, 0.0) + duration_s
+                if not is_exercise:
+                    total_transition_duration += duration_s
+                    seg_res = SegmentResult(
+                        segment_index=idx,
+                        exercise=exercise,
+                        start_time=start_s,
+                        end_time=end_s,
+                        duration_s=duration_s,
+                        is_exercise=False,
+                        rep_count=0,
+                        rep_times=[],
+                        flag="transition",
+                    )
+                else:
+                    total_exercise_duration += duration_s
+                    exercise_durations[exercise] = exercise_durations.get(exercise, 0.0) + duration_s
 
-                # Execute rule-based rep counting with end padding
-                count_res = count_for_exercise(
-                    df,
-                    exercise,
-                    start_s,
-                    end_s,
-                    end_pad_s=self.end_pad_s,
-                )
+                    # Same predicted intervals/padding; alternative counting is explicit.
+                    count_res = (experimental.count if experimental is not None else count_for_exercise)(
+                        df,
+                        exercise,
+                        start_s,
+                        end_s,
+                        end_pad_s=self.end_pad_s,
+                    )
 
-                reps = int(count_res["reps"])
-                rep_times = count_res["rep_times"]
-                total_reps += reps
-                exercise_counts[exercise] = exercise_counts.get(exercise, 0) + reps
+                    reps = int(count_res["reps"])
+                    rep_times = count_res["rep_times"]
+                    total_reps += reps
+                    exercise_counts[exercise] = exercise_counts.get(exercise, 0) + reps
 
-                pace = None
-                if reps >= 2 and len(rep_times) >= 2:
-                    pace = (rep_times[-1] - rep_times[0]) / (reps - 1)
-                elif reps == 1:
-                    pace = duration_s
+                    pace = None
+                    if reps >= 2 and len(rep_times) >= 2:
+                        pace = (rep_times[-1] - rep_times[0]) / (reps - 1)
+                    elif reps == 1:
+                        pace = duration_s
 
-                seg_res = SegmentResult(
-                    segment_index=idx,
-                    exercise=exercise,
-                    start_time=start_s,
-                    end_time=end_s,
-                    duration_s=duration_s,
-                    is_exercise=True,
-                    rep_count=reps,
-                    rep_times=rep_times,
-                    pace_s_per_rep=pace,
-                    signal_used=count_res.get("signal", ""),
-                    thresholds=count_res.get("thresholds"),
-                    range_deg=count_res.get("range_deg"),
-                    flag=count_res.get("flag", ""),
-                    valid_fraction=count_res.get("valid_fraction"),
-                    threshold_mode=count_res.get("threshold_mode", ""),
-                    adaptive_window_s=count_res.get("adaptive_window_s"),
-                    threshold_fractions=count_res.get("threshold_fractions"),
-                    arm_selection=count_res.get("arm_selection", ""),
-                    arm_candidates=count_res.get("arm_candidates", []),
-                )
+                    seg_res = SegmentResult(
+                        segment_index=idx,
+                        exercise=exercise,
+                        start_time=start_s,
+                        end_time=end_s,
+                        duration_s=duration_s,
+                        is_exercise=True,
+                        rep_count=reps,
+                        rep_times=rep_times,
+                        pace_s_per_rep=pace,
+                        signal_used=count_res.get("signal", ""),
+                        thresholds=count_res.get("thresholds"),
+                        range_deg=count_res.get("range_deg"),
+                        flag=count_res.get("flag", ""),
+                        valid_fraction=count_res.get("valid_fraction"),
+                        threshold_mode=count_res.get("threshold_mode", ""),
+                        adaptive_window_s=count_res.get("adaptive_window_s"),
+                        threshold_fractions=count_res.get("threshold_fractions"),
+                        arm_selection=count_res.get("arm_selection", ""),
+                        arm_candidates=count_res.get("arm_candidates", []),
+                        counter_method=count_res.get('method','state_machine'),
+                        counter_settings=count_res.get('counter_settings',{}),
+                        counter_diagnostics=count_res.get('signal_diagnostics',{}),
+                    )
 
-            segment_results.append(seg_res)
+                segment_results.append(seg_res)
 
         # 4. Build Workout Summary
         n_ex_segs = sum(1 for s in segment_results if s.is_exercise)
@@ -206,6 +219,8 @@ class WorkoutPipeline:
             ground_truth=gt_comparison,
             run_id="v2",
             experiment_id=self.bundle["experiment_id"],
+            rep_counter=self.rep_method,
+            rep_counter_config=(experimental.provenance if self.rep_method=='experimental' else {'id':'state_machine'}),
             comparison_scope=("final_test" if meta["split"]=="test" else "in_sample_train_demo") if show_gt else None,
         )
 
@@ -214,8 +229,9 @@ def analyze_workout(
     video_input: str | Path | pd.DataFrame,
     video_id: str | None = None,
     show_gt: bool = False,
+    coordinate_features: pd.DataFrame | None = None,
     **kwargs: Any,
 ) -> WorkoutAnalysisResult:
     """Convenience helper to run the workout pipeline in a single call."""
     pipeline = WorkoutPipeline(**kwargs)
-    return pipeline.analyze(video_input, video_id=video_id, show_gt=show_gt)
+    return pipeline.analyze(video_input, video_id=video_id, show_gt=show_gt,coordinate_features=coordinate_features)

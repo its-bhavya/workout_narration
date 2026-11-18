@@ -61,6 +61,9 @@ class SegmentResult:
     threshold_fractions: tuple[float, float] | None = None
     arm_selection: str = ""
     arm_candidates: list[dict[str, Any]] = field(default_factory=list)
+    counter_method: str = ''
+    counter_settings: dict[str, Any] = field(default_factory=dict)
+    counter_diagnostics: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -84,6 +87,9 @@ class SegmentResult:
             "threshold_fractions": self.threshold_fractions,
             "arm_selection": self.arm_selection,
             "arm_candidates": self.arm_candidates,
+            'counter_method':self.counter_method,
+            'counter_settings':self.counter_settings,
+            'counter_diagnostics':self.counter_diagnostics,
         }
 
 
@@ -150,6 +156,8 @@ class WorkoutAnalysisResult:
     run_id: str = "v2"
     experiment_id: str | None = None
     comparison_scope: str | None = None
+    rep_counter: str = 'state_machine'
+    rep_counter_config: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -158,6 +166,8 @@ class WorkoutAnalysisResult:
             "run_id": self.run_id,
             "experiment_id": self.experiment_id,
             "comparison_scope": self.comparison_scope,
+            'rep_counter':self.rep_counter,
+            'rep_counter_config':self.rep_counter_config,
             "summary": self.summary.to_dict(),
             "segments": [s.to_dict() for s in self.segments],
             "narration_timeline": [c.to_dict() for c in self.timeline_cues],

@@ -67,6 +67,7 @@ def narrate_analysis(analysis, output_dir, *, seed=42, use_bank=False,
     output.mkdir(parents=True, exist_ok=True)
     render(timeline, data["duration_s"], audio)
     result = {"video_id": data["video_id"], "run_id": data["run_id"],
+              "rep_counter":data.get('rep_counter'), "rep_counter_config":data.get('rep_counter_config',{}),
               "experiment_id": data.get("experiment_id"), "duration_s": data["duration_s"],
               "phrase_source_requested": "bank" if use_bank else "templates", "seed": seed,
               "segments": segments, "timeline": timeline, "skipped": skipped,

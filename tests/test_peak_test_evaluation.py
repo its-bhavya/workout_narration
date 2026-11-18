@@ -57,7 +57,7 @@ def test_test_evaluation_freezes_before_inference_and_preserves_features(synthet
 
     monkeypatch.setattr(WorkoutPipeline, "analyze", analyze)
     result = evaluate(output, selected, old, model_path=artifact["model"], windows_path=artifact["windows"],
-                       features_dir=artifact["features"], synth_dir=artifact["synth"])
+                       features_dir=artifact["features"], synth_dir=artifact["synth"],rep_method='state_machine')
     assert len(seen) == result["n_videos"] == 1
     assert result["test_inputs_verified_unchanged"]
     for method in result["methods"].values():

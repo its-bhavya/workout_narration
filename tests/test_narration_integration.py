@@ -60,7 +60,7 @@ def test_live_pipeline_result(synthetic_bundle, tmp_path):
     from src.pipeline import WorkoutPipeline
     a = synthetic_bundle
     pipeline = WorkoutPipeline(model_path=a["model"], windows_path=a["windows"],
-                               features_dir=a["features"], synth_dir=a["synth"])
+                               features_dir=a["features"], synth_dir=a["synth"],rep_method='state_machine')
     vid = next(iter(a["videos"]))
     result = pipeline.analyze(vid)
     report = narrate_analysis(result, tmp_path, synth=lambda text: "fake.mp3",

@@ -27,6 +27,7 @@ def print_workout_report(
     print("\n" + "=" * 78)
     print(f" WORKOUT ANALYSIS & NARRATION PIPELINE REPORT: {res.video_id}")
     print(f" Dataset: {res.run_id} | Model experiment: {res.experiment_id or 'unspecified'}")
+    print(f" Rep counter: {res.rep_counter}")
     print("=" * 78)
 
     # High-level summary

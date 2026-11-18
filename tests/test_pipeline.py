@@ -96,7 +96,7 @@ def test_resolve_features_input(tmp_path: Path):
 def test_pipeline_with_frozen_fixture(synthetic_bundle):
     artifact=synthetic_bundle
     pipeline=WorkoutPipeline(model_path=artifact["model"],windows_path=artifact["windows"],
-                             features_dir=artifact["features"],synth_dir=artifact["synth"])
+                             features_dir=artifact["features"],synth_dir=artifact["synth"],rep_method='state_machine')
     vid=next(vid for vid,meta in artifact["videos"].items() if meta["split"]=="train")
     result=pipeline.analyze(vid)
     assert result.run_id=="v2" and result.experiment_id=="fixture"
@@ -115,7 +115,7 @@ def test_pipeline_save_json(tmp_path: Path,synthetic_bundle):
     vid=next(vid for vid,meta in artifact["videos"].items() if meta["split"]=="test")
     result=analyze_workout(vid,show_gt=True,model_path=artifact["model"],
                            windows_path=artifact["windows"],features_dir=artifact["features"],
-                           synth_dir=artifact["synth"])
+                           synth_dir=artifact["synth"],rep_method='state_machine')
     target=tmp_path/"result.json";result.save_json(target)
     content=json.loads(target.read_text())
     assert content["run_id"]=="v2" and content["experiment_id"]=="fixture"

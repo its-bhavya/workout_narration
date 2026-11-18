@@ -1126,3 +1126,199 @@ inference/counting or changing the frozen configuration:
 The post-freeze evaluator, derived analyses, tests and reporting are committed
 separately after the tagged freeze, preserving freeze-first/evaluation-second
 history. No push is performed.
+
+## Training OOF segmentation plus counting comparison
+
+`evaluate_segmented_cv.py` evaluates all 120 registered training videos using
+the existing RF out-of-fold window predictions, verified against their saved
+selection hash and complete training-window keys. Every prediction must have
+`cv_fold == fold`; no all-training-refit prediction is substituted. The RF and
+smoothing (tau 0.5, minimum run 3 windows) were selected in development, so
+this remains selection-CV, not unbiased nested CV. Both counters receive
+identical smoothed segments and 0.3 s end padding; GT windows are not used
+as counting boundaries.
+
+The current counter uses unchanged default 2D state machines. Experimental
+counting reuses prior other-four-fold settings: arm-raise peaks for jumping
+jacks, hip-angle peaks for squats and coordinate median voting for push-ups.
+No rep settings are selected or retuned against the new segmentation results.
+Different held-out folds may use different hyperparameters; this is a
+development-CV comparison, not a new score for the single tagged all-training
+test configuration. Method-family selection still reflects development
+inspection, and the default pipeline is not changed.
+
+There are 154 predicted push-up windows requiring 77,816 unique stride-two
+coordinate frames. 69,263 raw pixel-landmark/visibility frames are reused
+from checksum-verified training sidecars; 8,553 missing frames (211 contiguous
+runs) are extracted using the same frozen full-frame IMAGE/two-pose protocol.
+Only raw coordinates and visibility are reused, never GT-window-derived
+signals or counts. Torso scaling and all derived signals are recomputed
+inside each predicted window. Cache availability depends on the previous
+GT-window extraction, but it does not select pose identities or fill missing
+predicted regions with labels. Every requested frame must be present exactly
+once after assembly. Model, canonical inputs, caches and previous results
+are read-only and hash-checked.
+
+Primary count metrics use 360 video/exercise totals (120 per exercise), with
+absent-exercise zeros included. Active-only scores and 120 whole-video totals
+are separate. These units differ from source-weighted GT-window MAE; the two
+tables cannot be subtracted to infer an additive segmentation-error budget.
+Fold MAEs, exact/within-one fractions, class-aware timing metrics and paired
+video-cluster bootstrap intervals are retained. Synthetic source reuse limits
+the independence of those intervals. No test feature/video inference is run.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.evaluate_segmented_cv --out-dir outputs/pushup_coordinates/segmented_training_cv_20261118 --workers 2
+```
+
+Existing output directories are refused. No commits or pushes are made for
+this follow-up unless separately authorized.
+
+### Completed segmented training-CV results
+
+The run completed all 120 videos and 360 video/exercise totals. Both counters
+use identical OOF segmentation, which reproduces mean fold Edit 71.537,
+frame accuracy 85.109% and segment F1@25 0.7042. Thus segmentation scores are
+unchanged between counters. There is no all-train-model inference or test run.
+
+| Exercise / unit | Current MAE | Experimental MAE | Exact: current -> experimental | Within +/-1: current -> experimental | Timing F1: current -> experimental |
+|---|---:|---:|---:|---:|---:|
+| Jumping jacks /120 | 7.942 | 5.242 | 50 -> 40 | 71 -> 70 | 0.8400 -> 0.8840 |
+| Push-ups /120 | 3.717 | 2.925 | 62 -> 62 | 71 -> 72 | 0.8678 -> 0.9119 |
+| Squats /120 | 2.683 | 2.708 | 54 -> 46 | 71 -> 78 | 0.8896 -> 0.8948 |
+| Overall video/exercise /360 | 4.781 | 3.625 | 166 -> 148 | 213 -> 220 | See exercise rows |
+
+Overall MAE falls 24.2%, but exact matches worsen from 46.11% to 41.11%.
+Within-one improves only from 59.17% to 61.11%. Overcounted video/exercise
+units rise from 82 to 119; undercounted units fall from 112 to 93. Mean signed
+error moves from -3.003 to -1.075 reps. The combination is better for mean
+absolute error and timing, not uniformly better for exact counts. Squat MAE
+is effectively tied/slightly worse even though its GT-window CV score was
+better. No post-result hybrid is selected or promoted.
+
+Descriptive paired video-cluster 95% bootstrap intervals (new minus current
+MAE) are overall -1.156 [-2.142, -0.381], jumping jacks -2.700 [-5.375, -0.650],
+push-ups -0.792 [-1.575, -0.050], and squats +0.025 [-0.517, +0.684]. These
+are exploratory training intervals, not independent confirmation; synthetic
+source reuse and development selection limit their interpretation. Push-up
+MAE improves in all five folds. Jumping-jack error remains concentrated in
+fold 3 (22.583 to 12.250); its fold 2 worsens (1.875 to 2.375).
+
+Active-only MAEs are jumping jacks 9.490 to 6.190 over 100 videos, push-ups
+6.862 to 5.385 over 65 videos, and squats 2.683 to 2.708 over all 120 videos.
+Whole-workout totals have MAE 12.092 to 8.458, exact 7/120 to 9/120, and
+within-one 31/120 to 30/120. Cancellation across exercises makes those totals
+different from the primary 360-unit metric.
+
+The first strict-JSON report export failed because a segmentation boundary
+distance was infinite for synth_v2_train_f2_0007. All counting and extraction
+had completed and the raw tables were saved. The report was finalized from
+those tables without repeating pose inference or counting. Non-finite boundary
+distances are null in JSON, never zero; raw per-video CSV retains infinity.
+The plan records the evaluator hash at inference, and the report records the
+finalizer hash and saved count-table hashes. Integrity checks passed.
+
+```powershell
+# Recovery/finalization only when complete tables exist but report.json does not:
+.venv/Scripts/python.exe -m src.rep_counting.evaluate_segmented_cv --out-dir outputs/pushup_coordinates/segmented_training_cv_20261118 --finalize-only
+```
+
+Artifacts:
+
+- [Full segmented-CV report](../../outputs/pushup_coordinates/segmented_training_cv_20261118/report.json)
+- [Pre-inference plan, fold settings and input hashes](../../outputs/pushup_coordinates/segmented_training_cv_20261118/evaluation_plan.json)
+- [All video/exercise count comparisons](../../outputs/pushup_coordinates/segmented_training_cv_20261118/video_exercise_comparison.csv)
+- [Predicted segments and per-method rep timelines](../../outputs/pushup_coordinates/segmented_training_cv_20261118/counted_segments.csv)
+- [Whole-video counts](../../outputs/pushup_coordinates/segmented_training_cv_20261118/whole_video_comparison.csv)
+- [Segmentation scores](../../outputs/pushup_coordinates/segmented_training_cv_20261118/segmentation_metrics.csv)
+- [Class-aware rep timing matches](../../outputs/pushup_coordinates/segmented_training_cv_20261118/timing.csv)
+
+This is development selection-CV with held-out segmentation and other-fold
+rep settings, not the tagged single-config test evaluation. Canonical data,
+prior results, frozen tag and production defaults are unchanged. This
+follow-up code/documentation remains uncommitted; nothing was pushed.
+
+### Jumping-jack predicted-window failure classification
+
+`classify_jumping_jack_windows.py` analyzes saved OOF segments, experimental
+rep timestamps, GT annotations and the earlier GT-window counter results.
+It performs no model, pose or rep-counter inference. All 120 train videos
+remain included: 155 GT JJ windows, 146 predicted JJ windows. Video-level
+signed errors are predicted-minus-annotated: 37 undercounts, 43 overcounts,
+40 exact. Flags overlap and do not partition errors into causal categories.
+
+| Video flag | All /120 | Undercount /37 | Overcount /43 | Exact /40 |
+|---|---:|---:|---:|---:|
+| Clipped GT JJ start/end | 21 | 16 | 3 | 2 |
+| Overlong predicted JJ window | 82 | 24 | 41 | 17 |
+| Fragmented GT JJ window | 4 | 4 | 0 | 0 |
+| Predicted JJ merges GT JJ windows | 3 | 1 | 2 | 0 |
+| GT JJ window predominantly labeled something else | 19 | 18 | 1 | 0 |
+| Predicted JJ window predominantly outside GT JJ | 3 | 2 | 1 | 0 |
+| At least one wholly missed GT JJ window | 12 | 11 | 1 | 0 |
+| Predicted JJ in a video without GT JJ | 1 | 0 | 1 | 0 |
+
+Boundary flags use a descriptive 0.5 s tolerance. Clipping means first/last
+correct-label coverage starts late/ends early; wholly missed windows are
+separate. Fragmentation requires two predicted JJ pieces each overlapping
+the same GT window by >0.5 s; merging is the converse. Overlong compares a
+predicted JJ window against its maximum-overlap GT JJ window and may coexist
+with merging. Predominantly wrong predicted JJ means <50% of its duration
+overlaps GT JJ; predominantly mislabeled GT uses its duration-dominant
+predicted label. Full unthresholded boundary deltas, coverage, lengths and
+all overlap pairs are retained. The counting end's +0.3 s padding is recorded
+separately from nominal segmentation boundaries.
+
+The 612 unmatched annotated reps break down as follows, using saved class-aware
+one-to-one matching at 0.3 s tolerance and nominal JJ-window interval coverage:
+
+| Missed annotated rep coverage | Reps | Fraction of misses |
+|---|---:|---:|
+| No predicted JJ window overlaps the rep interval | 402 | 65.7% |
+| Partial JJ-window coverage | 22 | 3.6% |
+| Full JJ-window coverage, still no matched counted rep | 188 | 30.7% |
+
+There are also 195 unmatched predicted reps: 109 timestamps inside GT JJ
+windows and 86 outside. Missing-label coverage is a major association with
+missed reps, but the fully covered misses and inside-GT extras show substantial
+counter/signal errors remain. Full coverage does not establish reliable pose
+or a valid signal; outside-window extras are not proof of a specific boundary
+cause. Nominal coverage is descriptive and cannot assign all misses to
+segmentation, especially around padded boundaries.
+
+Illustrative saved windows and video errors:
+
+| Video suffix / clip | GT JJ window (length) | Predicted JJ window (length) | Other predicted label / observation | Video JJ signed error |
+|---|---|---|---|---:|
+| f3_0002 / stu5_25 | 77.03-135.47 s (58.43 s) | 107.50-111.50 s (4.00 s) | Mostly transition; only 6.85% JJ coverage | -66 |
+| f3_0018 / stu5_25 | 21.07-79.50 s (58.43 s) | 51.50-55.50 s (4.00 s) | Mostly transition; only 6.85% JJ coverage | -62 |
+| f1_0001 / val568 | 136.97-146.77 s (9.80 s) | 136.50-146.50 s (10.00 s) | Boundaries nearly correct; count 19 vs GT 55; GT-window error also -36 | -36 |
+| f2_0008 / no GT JJ | None | 0-8.50 s (8.50 s) | Dominant GT label transition; 10 false JJ reps | +10 |
+
+Video errors aggregate all JJ clips in each video, not just the displayed
+window. The first two rows reuse the same source clip and are not independent
+failures. Fragmentation is uncommon here; long JJ regions labeled transition
+deserve priority alongside the clear counter-only failures. Overlong flags
+appear in 41/43 overcounting videos, but also in 17 exact videos; this is not
+evidence that all overcounts would be fixed by trimming. Four erroneous videos
+have none of these temporal flags.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.classify_jumping_jack_windows --out-dir outputs/pushup_coordinates/jumping_jack_window_failures_20261118
+```
+
+Artifacts (read-only derivation, canonical/saved result hashes verified unchanged):
+
+- [Classification tally and definitions](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/report.json)
+- [Every video, signed errors and overlapping flags](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/videos.csv)
+- [GT-window boundaries, lengths and predicted-label coverage](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/gt_windows.csv)
+- [Predicted labels, boundaries, lengths and best GT matches](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/predicted_windows.csv)
+- [Every relevant predicted/GT overlap pair](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/window_intersections.csv)
+- [Missed/extra rep classification](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/rep_event_classification.csv)
+- [Six largest-error GT/predicted timelines](../../outputs/pushup_coordinates/jumping_jack_window_failures_20261118/largest_errors_timelines.png)
+
+GT-window event-allocated signed errors assign saved predicted JJ timestamps
+inside GT [start,end); video totals also retain events outside GT windows.
+This field is not a fresh count on GT windows or a one-to-one matched count.
+The video row separately retains the previously saved GT-window counter error.
+No labels, signals, spacing, segmentation settings or defaults are changed.

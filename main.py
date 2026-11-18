@@ -72,6 +72,8 @@ def main() -> None:
 
     parser.add_argument("--narration-dir", type=Path,
                         help="Synthesize narration.wav and narration.json from predicted segments.")
+    parser.add_argument('--rep-method',choices=['experimental','state_machine'],default='experimental',
+                        help='Rep counter: frozen experimental combo (default), or legacy state machine.')
     parser.add_argument("--narration-seed", type=int, default=42)
     parser.add_argument("--llm", action="store_true",
                         help="Use cached narration phrase bank with template fallback.")
@@ -83,6 +85,7 @@ def main() -> None:
         model_path=args.model,
         tau=args.tau,
         min_len=args.min_len,
+        rep_method=args.rep_method,
     )
 
     result = pipeline.analyze(

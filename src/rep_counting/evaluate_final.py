@@ -37,6 +37,11 @@ def grouped(rows):
 
 
 def evaluate(output_dir, **pipeline_options):
+    # Historical benchmark is state-machine-only for both GT and predicted
+    # windows. Do not silently mix the new pipeline default with old oracles.
+    if pipeline_options.get('rep_method','state_machine')!='state_machine':
+        raise ValueError('This historical evaluator requires rep_method=state_machine')
+    pipeline_options['rep_method']='state_machine'
     output = Path(output_dir)
     if output.exists():
         raise FileExistsError("Choose a new output directory to preserve previous results")
