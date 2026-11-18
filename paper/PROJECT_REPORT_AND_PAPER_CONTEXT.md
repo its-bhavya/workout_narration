@@ -140,6 +140,148 @@ Plots and per-segment prediction CSVs are linked from those existing reports.
 
 This dated section is the current rep-counter experiment record; older counter tables and workflow notes below are historical unless explicitly identified as current v2.
 
+## Supporting GT-window diagnostic on synthetic test (18 November 2026)
+
+The current frozen unguided-peak candidate was replayed inside all 79 annotated
+exercise windows across the 21 test videos. Previous and proposed frozen
+configurations reproduced all 158 saved count/timestamp lists exactly. Report
+this as a counter-only diagnostic, not as the headline end-to-end result.
+
+| Exercise | Annotated windows | Previous counter MAE | Proposed counter MAE | Proposed within +/-1 |
+|---|---:|---:|---:|---:|
+| Jumping jacks | 27 | 1.370 | 1.444 | 77.78% |
+| Push-ups | 27 | 3.778 | 3.778 | 59.26% |
+| Squats | 25 | 1.360 | 1.200 | 84.00% |
+
+MAE here is per annotated exercise segment, with zero end padding. Push-up
+errors remain high even with correct exercise windows. Do not subtract these
+values from headline MAE, whose unit is an exercise total per video.
+
+After aggregating GT counts to the same 63 video/exercise units and using zero
+padding for both window sources, proposed-counter MAE is 3.048 for predicted
+windows versus 2.651 for GT windows. The actual padded end-to-end headline
+remains 3.127. This window-policy comparison is not an additive causal error
+budget: exercise classification, boundaries, fragmentation, adaptive counting,
+and cancellation interact. GT windows can yield worse aggregate counts for
+some exercises when false detections had offset misses.
+
+No test-driven tuning or production-default changes were made. This is a
+follow-up on the already inspected test set; pose extraction remains
+annotation-assisted. Data and previous results were verified unchanged.
+See [the existing counter README](../src/rep_counting/README.md) for the full
+same-unit table and supporting local artifact links. The corresponding local
+report is `outputs/peak_improvements/gt_window_diagnostic_20261118/report.json`.
+
+## Push-up failure diagnosis and coordinate pilot (18 November 2026)
+
+The current GT-window test errors are mixed: 13 exact source windows, seven
+overcounts, seven undercounts. Two undercount cases account for 58/102 absolute
+errors (56.9%); coarse sampled camera views are side-on for both. Their selected
+elbows have 26.79% and 66.56% raw coverage. Camera angle alone is not established
+as the cause. View tags are manually sampled observations, not calibrated labels.
+
+A training-only timing sweep refutes imposing a blanket 0.7-1.0 s minimum rep
+spacing on this benchmark. About 25%/53% of source-weighted annotated completion
+gaps are shorter than those limits. Other-fold-selected MAE increases from
+2.857 at 0.2 s to 5.841 at 0.7 s and 7.918 at 1.0 s. Jointly tuning spacing,
+smoothing, prominence and recovery does not beat the frozen baseline (2.821).
+No test-driven parameter update is made.
+
+An isolated six-case pose pilot (four selected training cases and two test
+failures) writes new coordinate sidecars only under outputs. Shoulder/head and
+shoulder-to-wrist signals are feasible, but these selected-case results are not
+fold-validated accuracy. Fresh full-frame elbow extraction also improves the
+outliers, and crop/upsampling can worsen counts. Different person-selection
+policies confound comparison with the canonical cache, so the pilot does not
+prove that cropping or a particular coordinate signal solves the failure.
+
+Ten clips received unblinded sampled temporal screening; five are unresolved.
+This is not an independent native-frame ten-video recount, and no corrected
+labels or label-noise estimate is asserted. Compound-cycle and endpoint
+conventions need independent adjudication. No existing data, annotations,
+production defaults, or headline test scores were changed. See the existing
+[rep-counting README](../src/rep_counting/README.md) for detailed evidence,
+methods, limitations and local artifact paths.
+
+## Consistent training coordinate-sidecar experiment (18 November 2026)
+
+The coordinate pilot is extended to all 155 training push-up GT windows from
+81 source clips, using one full-frame MediaPipe IMAGE protocol at stride two,
+up to two poses, and per-frame largest-visible-bounding-box person selection.
+Original pixel coordinates, timestamps, confidence and derived signals are
+stored separately under `outputs/pushup_coordinates/`. Fixed per-window median
+torso length normalizes shoulder height, shoulder-to-wrist height and nose
+height; both elbow angles and confidence-weighted elbows are also retained.
+This offline extraction differs from canonical annotation-assisted tracking.
+
+The opt-in coordinate peak counter compares individual signals, count-free
+quality selection and median voting across distinct spatial/elbow signals.
+Quality weights are fixed; no per-video annotated count selects a signal.
+Smoothing, spacing, relative prominence and recovery form a 36-setting grid
+per family (324 candidates overall). Each held-out fold uses family/settings
+selected on the other four source-disjoint folds. All windows remain in the
+denominator, including unusable signals. Fixed canonical and newly extracted
+elbow baselines distinguish re-extraction effects from signal/counting changes.
+
+Plans and sidecars carry code/input/model hashes and original frame alignment.
+Validation requires the complete registered training set, verifies source-fold
+separation and checks canonical inputs and previous results unchanged. This
+is exploratory training development with GT windows, not a final-test result,
+unbiased nested CV or evidence of real-time performance. No canonical features,
+annotations, production defaults or headline test scores are replaced.
+Reproduction commands and local result links are in the existing
+[counter README](../src/rep_counting/README.md).
+
+Completed extraction contains all 155 windows; verified resume reports zero
+pending. Canonical and reference-result hashes are unchanged. Training-only
+results use source-weighted MAE across folds:
+
+| Comparison | MAE | Timing F1 | Active videos within +/-1 |
+|---|---:|---:|---:|
+| Previous other-fold-selected peaks | 2.827 | 0.8910 | 29.23% |
+| Canonical elbows, fixed normalized counter | 2.821 | 0.8912 | 29.23% |
+| Fresh elbows through identical counter path | 2.471 | 0.9045 | 35.38% |
+| Broad family + parameter selection on other folds | 2.850 | 0.9188 | 40.00% |
+| Median family, parameter selection on other folds | 1.940 | 0.9382 | 44.62% |
+
+Fresh extraction improves the same fixed elbow counter by 12.4%, but broad
+family selection does not improve MAE; its active-video MAE worsens to 6.400
+from 4.662. Within-family MAEs are median 1.940, head 2.058, wrist-relative
+2.095, quality 2.194, shoulder 2.424, fresh elbow-quality 2.633, weighted elbows
+3.363, left elbow 7.796 and right elbow 8.615. Median is promising (31.4%
+lower source-weighted MAE than previous peaks), with per-fold values 1.688,
+2.324, 1.531, 2.406 and 1.750. Its active-video MAE is 4.292 over 65 videos.
+Choosing median after inspecting family scores is a development decision,
+not an independently evaluated family-selection procedure. The broad-search
+2.850 score must remain visible alongside the best-family result.
+
+Exact-count and within-one comparisons use unweighted synthetic occurrences;
+within-one includes exact matches:
+
+| Method | Exact windows /155 | Windows within +/-1 /155 | Exact active videos /65 | Active videos within +/-1 /65 |
+|---|---:|---:|---:|---:|
+| Previous peaks | 52 (33.55%) | 72 (46.45%) | 9 (13.85%) | 19 (29.23%) |
+| Canonical fixed elbows | 52 (33.55%) | 72 (46.45%) | 9 (13.85%) | 19 (29.23%) |
+| Fresh elbows, identical counter | 56 (36.13%) | 81 (52.26%) | 11 (16.92%) | 23 (35.38%) |
+| Fresh elbows, fixed new quality path | 55 (35.48%) | 81 (52.26%) | 11 (16.92%) | 24 (36.92%) |
+| Broad other-fold selection | 76 (49.03%) | 100 (64.52%) | 14 (21.54%) | 26 (40.00%) |
+| Median family, other-fold parameters | 83 (53.55%) | 100 (64.52%) | 17 (26.15%) | 29 (44.62%) |
+
+Video counts aggregate all annotated push-up windows before computing error;
+window errors can cancel. The 65-video denominator excludes the 55 videos
+without annotated push-ups. Neither percentage uses source-weighted fold MAE
+weighting. Family-selection and GT-window caveats above still apply.
+
+All spatial channels pass usability guards in every training window, versus
+106/155 left elbows, 102/155 right elbows and 151/155 weighted elbows.
+Mean raw shoulder/head coverage is about 94%; wrist-relative coverage is 92%.
+Improvement does not establish correct person identity or camera invariance.
+The all-training best quality configuration scores 1.690 in-sample; this must
+not be reported as held-out accuracy. The experiment remains opt-in and has
+not been evaluated on test frames. Full per-window predictions, signal
+coverage, candidate scores, environment and hashes are retained in
+`outputs/pushup_coordinates/train_v1_validation_20261118/`.
+
 ## Current full-flow implementation and reporting scope
 
 Runnable instructions: [END_TO_END.md](../docs/END_TO_END.md). The supported

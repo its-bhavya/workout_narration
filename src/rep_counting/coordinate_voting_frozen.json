@@ -1,0 +1,65 @@
+{
+  "freeze_id": "coordinate-voting-v1-20261118",
+  "created_at_utc": "2026-11-18T05:09:33.003648+00:00",
+  "selection_split": "train",
+  "family": "median",
+  "settings": {
+    "signal": "median",
+    "smooth_s": 0.5,
+    "min_gap_s": 0.2,
+    "prominence_fraction": 0.35,
+    "recovery_fraction": 0.5,
+    "width_s": 0.06666666666666667
+  },
+  "voters": [
+    "shoulder_height",
+    "shoulder_to_wrist_height",
+    "weighted_elbows"
+  ],
+  "training_candidate_id": 187,
+  "selection_rule": "Lowest all-training source-weighted fold MAE within median family; family chosen after exploratory fold comparisons.",
+  "training_report_sha256": "24a7ef294b525ef1d4a5b36d3e70b80ec413b65fbb63b8f4cd0b460994160e75",
+  "training_candidates_sha256": "f30e9053bb48803964115c7f6246059f62a2847bd7ce061511c9222859da6f8d",
+  "training_plan_sha256": "471246c9f9e31c8edf49f204e20e152be06abe49e3fc299a5168ae91328ea945",
+  "source_hashes": {
+    "coordinate_counter.py": "ace59a8f30188dd254bbc94752f1f666bea1e64152b81da5dbf40be2b37a5354",
+    "extract_coordinate_training.py": "a261fb614c27a7adfcfa5bcc0a224f742b327696237a3cc48d0700d519a4a641",
+    "extract_pushup_diagnostic.py": "13ab36a9a5ffc987dca2bba669723573583806fb81f9b7be7e3984b0a263de7b",
+    "peak_counter.py": "644be80aecbe378c5c88f66d18e463a6c576128584ec767f619233850e9f57f3",
+    "peak_improvements.py": "a0b098cec0c48cc64e15121147658470a39dfcb76378a68f960f49e172106a42",
+    "rep_counter.py": "b7c98b48186f382c0666279e0ec4b0d62ac96ff9b1dea26fecb8e5b191c879c7",
+    "arm_quality.py": "40fff48ab9e0f02cebffcb5ca79e8cbcdd977885f5df5e492a57106c4c53d7f0"
+  },
+  "pose_model_sha256": "5134a3aad27a58b93da0088d431f366da362b44e3ccfbe3462b3827a839011b1",
+  "extraction": {
+    "mode": "IMAGE",
+    "stride": 2,
+    "num_poses": 2,
+    "person_selection": "largest_visible_bbox_per_frame",
+    "crop": false,
+    "torso_scale": "fixed median within each evaluated window"
+  },
+  "evaluation_policy": {
+    "label": "second exploratory coordinate-voting test evaluation; test set previously inspected",
+    "test_videos": 21,
+    "change": "push_up only; other exercises retain proposed_unguided_peaks from first follow-up",
+    "previous_test_dir": "outputs/peak_improvements/test_followup_20261118",
+    "predicted_windows": "reuse saved segmentation boundaries; 0.3 s end padding",
+    "gt_windows": "annotated exercise windows; zero padding",
+    "no_usable_signal": "zero reps; no window exclusions",
+    "bootstrap": {
+      "unit": "paired video cluster",
+      "resamples": 10000,
+      "seed": 20261118,
+      "confidence": 0.95
+    },
+    "top_two_training_clips": "rank by source-mean absolute error of previous peak baseline; remove same two source identities from both comparisons",
+    "top_two_test_clips": "use the two previously diagnosed source identities stu9_52.mp4 and stu4_46.mp4; descriptive sensitivity only"
+  },
+  "limitations": [
+    "No test-driven parameter changes after freeze.",
+    "Family selected after inspecting training development results.",
+    "Already-inspected test set; not a pristine holdout.",
+    "Canonical data and production defaults unchanged."
+  ]
+}

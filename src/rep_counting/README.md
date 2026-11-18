@@ -327,3 +327,591 @@ and [comparison plot](../../outputs/pca_counter/verified_train_experiment_202611
 Three fixed first-segment examples show projected signals, channel motion, and
 annotated versus predicted recovery events. Existing reference results were
 read only; no data/features/model files were rewritten.
+
+## Unguided-peak error analysis and targeted improvements (18 November 2026)
+
+Work branch: `experiments/peak-detection-improvements`. The default integrated
+counter and all existing feature/annotation files remain unchanged. These are
+opt-in, training-only experiments, not new end-to-end test results.
+
+### Error analysis before counter changes
+
+`analyze_peak_errors.py` reconstructs the exact unguided peak settings selected
+on other source-disjoint training folds and checks count MAE and temporal errors
+against the saved reference. It writes signed errors per segment/source clip,
+video/exercise counts, full-video totals, and every unmatched annotated/detected
+rep. Position diagnostics include normalized first/middle/last segment bins,
+first/last annotated reps, edge proximity, and missing-signal overlap. Missingness
+and position are associations, not proof of a particular failure mechanism.
+
+The 120 GT-window training videos contain 8,654 annotated reps versus 8,052
+baseline detections. Full-video mean signed error is -5.02 reps (undercounting),
+MAE 8.10, and 32.50% of videos are within one rep. Video totals can hide errors
+cancelling across exercises and do not include segmentation error.
+
+| Exercise | Missed reps | Extra detections | Active videos | Signed error / active video | Active videos within +/-1 |
+|---|---:|---:|---:|---:|---:|
+| Jumping jacks | 543 | 114 | 100 | -4.29 | 66.00% |
+| Push-ups | 386 | 281 | 65 | -1.62 | 29.23% |
+| Squats | 139 | 71 | 120 | -0.57 | 75.00% |
+
+All-video per-exercise within-one rates (including absent-class zero rows) are
+71.67% jumping jacks, 61.67% push-ups, and 75.00% squats. Active-only rates above
+avoid those exact-zero matches inflating the apparent performance. No missing
+or failed segment is excluded from count evaluation.
+
+For jumping jacks, 432 of 543 misses occur in the middle 80% of segment time;
+the middle miss rate is 14.82%, versus 12.75% in the first 10% and 15.43% in
+the last 10%. Edge effects alone do not explain the main deficit. First/last
+annotated-rep miss rates are 12.90%/19.35% for jumping jacks, 20.65%/12.26% for
+push-ups, and 13.33%/12.00% for squats. Misses overlapping missing cleaned
+tracking are 200/543, 247/386, and 101/139 respectively. These are pooled
+segment-occurrence counts, including synthetic reuse, not independent clips.
+
+Opposite-phase peak/recovery counts are also computed without changing the
+reported count. Disagreement >1 flags 18 jumping-jack, 40 push-up, and 28 squat
+segments. Of those flagged segments, 83.33%, 85.00%, and 50.00% respectively
+have count error >1. This is a diagnostic association, not a validated decision
+threshold or an instruction to pick whichever phase produces more reps.
+
+### What the cached data supports
+
+The cache has arm-raise, leg-spread, knee, hip, and elbow angles with visibility,
+and ankle distance normalized by horizontal shoulder width. It does not store
+raw wrist/hip positions needed to derive wrist height, wrist-to-wrist distance,
+or normalized hip height. Those would require a separate extraction stage;
+no pose extraction or existing feature modification was performed here.
+
+`peak_improvements.py` evaluates three related changes:
+
+- Smoothing/spacing on the existing selected signal, with genuine smoothing-off
+  support rather than the old cleaner's minimum five-sample filter.
+- Conservative arm/ankle fusion for jumping jacks, confidence-weighted elbow
+  averaging for push-ups, and knee/hip-angle fusion for squats. Signals are
+  independently standardized. Fusion requires all components at a frame to
+  avoid changes in contributors manufacturing a cycle. Elbow visibility weights
+  ignore unavailable/low-confidence joints rather than inserting zero angles.
+- Median-count voting among three usable component signals. The returned event
+  timeline belongs to an actual candidate having the median count; event times
+  are never fabricated or truncated. With fewer than three voters it falls back
+  to the baseline signal.
+
+Motion guards remain per raw feature (including 0.15 shoulder-width units for
+ankle spacing). Prominence is adaptive already: a fraction of each finite
+run's robust p10/p90 range. After standardization, this experiment uses a
+0.1 score-unit minimum rather than the earlier 8-degree floor. This is a bundled
+signal/preprocessing comparison, not an isolated fusion-only ablation.
+Autocorrelation spacing is disabled throughout; no signal is reflected or padded
+at segment edges and the existing 70%-prominence recovery convention is unchanged.
+
+The grid uses smoothing 0/0.3/0.6 seconds, prominence fractions
+0.15/0.25/0.35/0.45, minimum width 1/15 second, and two minimum spacings per
+exercise: jumping jacks 0.25/0.5, push-ups 0.2/0.35, squats 0.35/0.5 seconds.
+Four signal families for jumping jacks/squats give 96 candidates each; push-ups
+use three distinct families (72 candidates). Parameters and family are selected
+on four training folds and evaluated on the fifth, equally weighting source
+clips within folds. This remains exploratory development, not unbiased nested CV.
+
+### Results and trade-offs
+
+| Exercise | Previous source-weighted fold MAE | New other-fold selected MAE | Previous active videos within +/-1 | New active videos within +/-1 |
+|---|---:|---:|---:|---:|
+| Jumping jacks | 4.204 | 2.877 | 66.00% | 64.00% |
+| Push-ups | 2.827 | 2.989 | 29.23% | 29.23% |
+| Squats | 1.150 | 0.975 | 75.00% | 85.83% |
+
+Jumping-jack MAE improves by 31.6%, but the within-one video fraction falls by
+two percentage points. Rep-matching F1 improves from 90.54% to 93.73%. A lower
+MAE is therefore not a universal per-video improvement. Whole-video count MAE
+across all exercises drops from 8.10 to 5.90 and within-one rises from 32.50%
+to 36.67%, with possible cancellation between class errors.
+
+The all-training selected jumping-jack setting keeps the existing arm signal,
+disables smoothing, uses prominence fraction 0.25 and minimum spacing 0.25 s.
+Within the same normalized baseline-signal family, fixing the old 0.5 s gap
+yields other-fold MAE 4.210 versus 2.877 when spacing is selectable. Fixing
+smoothing at 0.3 s still gives 2.992. The spacing constraint is the strongest
+supported lever; the gain is not evidence that arm/leg fusion helped.
+
+Family-specific other-fold MAEs:
+
+| Exercise | Existing signal, retuned | Alternate signal | Fused signal | Median voting |
+|---|---:|---:|---:|---:|
+| Jumping jacks | 2.877 | 5.197 | 4.579 | 3.729 |
+| Push-ups | 2.821 | same as fused | 3.489 | 2.978 |
+| Squats | 1.216 | 0.963 | 0.943 | 0.994 |
+
+For push-ups, weighted averaging and voting did not outperform the previous
+selected-arm approach. For squats, hip angles/fusion are promising, but the best
+family selected after inspecting all fold scores is itself a development choice,
+not an independent estimate. The all-family other-fold selector is the main
+comparison table above. Existing 3D squat results are separate and unchanged.
+
+No new default is promoted: retain the prior push-up counter, consider a frozen
+spacing/smoothing update for jumping jacks, and investigate squat hip-angle
+fusion further. Automatic edge completion or taking the larger peak/valley
+count would risk counting partial/noisy motion and was not introduced.
+
+### Reproduce and inspect
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.analyze_peak_errors --out-dir outputs/peak_improvements/new_error_analysis
+.venv/Scripts/python.exe -m src.rep_counting.validate_peak_improvements --baseline-dir outputs/peak_improvements/new_error_analysis --out-dir outputs/peak_improvements/new_comparison
+```
+
+The programs refuse existing output directories, validate against reference
+input hashes, verify selected public-API outputs on all 460 segments, and assert
+that training data and global counter defaults remain unchanged. No test feature
+frames are read. The opt-in API is `count_improved_peaks(..., settings=ImprovementSettings(...))`.
+
+Local outputs (ignored by Git):
+
+- [Signed, positional, tracking, video, and phase-error report](../../outputs/peak_improvements/error_analysis_with_phase_20261118/report.json)
+- [Per-video/exercise baseline counts](../../outputs/peak_improvements/error_analysis_with_phase_20261118/video_exercise.csv)
+- [Every temporal error](../../outputs/peak_improvements/error_analysis_with_phase_20261118/temporal_errors.csv)
+- [Verified alternative settings and metrics](../../outputs/peak_improvements/verified_cached_signal_comparison_20261118/report.json)
+- [All candidate/fold scores](../../outputs/peak_improvements/verified_cached_signal_comparison_20261118/candidates.csv)
+- [Other-fold selected rep timestamps](../../outputs/peak_improvements/verified_cached_signal_comparison_20261118/heldout_segments.csv)
+- [Comparison plot](../../outputs/peak_improvements/verified_cached_signal_comparison_20261118/comparison.png)
+
+No annotations, cached features, existing reference results, or integrated
+counter defaults were rewritten. No commits or pushes were performed.
+
+## Frozen unguided-peak test follow-up (18 November 2026)
+
+`evaluate_peak_test.py` freezes both configurations from training records and
+writes `frozen_settings.json` before the first test inference. The candidate
+uses each exercise's all-training selected settings from the cached-signal
+experiment; the baseline uses the earlier unguided-peak settings selected on
+all training folds. No test-driven parameter edits, signal changes, or automatic
+adoption occur. This is a follow-up on the same already-inspected test set,
+not a new untouched holdout.
+
+All 21 indexed synthetic test videos use the same frozen RF segmentation
+bundle. Both counters receive identical predicted exercise windows, with the
+existing 0.3-second end padding; GT-window diagnostics use zero padding.
+No test videos or failed segments are silently skipped. Separate per-class
+temporal matching penalizes detections in the wrong exercise/time interval.
+
+### Segmentation followed by counting
+
+MAE is reps per exercise per video: 21 units per exercise, 63 overall, including
+absent-class zero rows. This is not the source-weighted training-fold MAE.
+
+| Exercise | Previous predicted / annotated | Proposed predicted / annotated | Previous MAE | Proposed MAE | Previous within +/-1 | Proposed within +/-1 |
+|---|---:|---:|---:|---:|---:|---:|
+| Jumping jacks | 782 / 761 | 786 / 761 | 2.714 | 2.905 | 52.38% | 52.38% |
+| Push-ups | 430 / 468 | 430 / 468 | 4.381 | 4.381 | 61.90% | 61.90% |
+| Squats | 357 / 361 | 349 / 361 | 2.381 | 2.095 | 52.38% | 61.90% |
+| Overall | 1569 / 1590 | 1565 / 1590 | 3.159 | 3.127 | 55.56% | 58.73% |
+
+The overall video/exercise MAE improvement is about 1.0%, driven by squats.
+Jumping jacks regress slightly and push-ups are unchanged. Overall WAPE is
+12.52% -> 12.39%, exact match 36.51% -> 38.10%, and class-aware timing F1
+90.91% -> 91.16%. The candidate counts 1,565 of 1,590 annotated reps, but that
+net total is not a detection-accuracy measure.
+
+For complete video totals (sum across classes), MAE worsens from 7.19 to 7.76
+reps/video, and within-one falls from 4/21 (19.05%) to 2/21 (9.52%). Aggregate
+class errors can cancel differently when summed per video; these metrics do
+not contradict a small improvement in video/exercise MAE. They prevent claiming
+that the new candidate is an across-the-board improvement.
+
+Active-only per-exercise within-one fractions are 41.18% jumping jacks (17
+videos), 27.27% push-ups (11), and 61.90% squats (21) for the candidate. Baseline
+rates are 41.18%, 27.27%, and 52.38%. Active-only reports and all-video reports
+are both retained to expose inflation from exercise-absent exact-zero rows.
+
+### Counter-only GT-window diagnostic (verified replay, 18 November 2026)
+
+Both frozen configurations were replayed on all 79 annotated exercise windows
+across all 21 test videos, without parameter changes or end padding. All 158
+counts and completion-timestamp lists exactly reproduce the original saved
+GT-window diagnostic. This is supporting error analysis, not the headline result.
+The headline remains counting after predicted segmentation.
+
+MAE below is per annotated exercise segment; exact/within-one percentages use
+those same segments. This unit differs from per-video/exercise headline MAE.
+
+| Exercise | GT windows | Previous MAE | Proposed MAE | Proposed exact | Proposed within +/-1 |
+|---|---:|---:|---:|---:|---:|
+| Jumping jacks | 27 | 1.370 | 1.444 | 51.85% | 77.78% |
+| Push-ups | 27 | 3.778 | 3.778 | 48.15% | 59.26% |
+| Squats | 25 | 1.360 | 1.200 | 68.00% | 84.00% |
+| Overall | 79 | 2.190 | 2.165 | 55.70% | 73.42% |
+
+The proposed counter detects 1,515 of 1,590 annotated reps inside GT windows.
+Push-up count errors remain substantial with perfect exercise windows; removing
+segmentation errors does not solve the principal counting failure. The proposed
+jumping-jack training gain is absent in the GT-window test diagnostic as well.
+
+For a comparable window-policy diagnostic, GT-window counts were summed into
+21 video/exercise units per class (63 overall). Predicted windows were also
+recounted with zero end padding, holding counter parameters, input video,
+labels-at-inference, and aggregation fixed. These supplementary zero-padding
+runs do not replace the existing headline with 0.3-second predicted-window padding.
+
+| Exercise | Predicted windows, no padding | GT windows, no padding | Original headline, predicted windows +0.3 s |
+|---|---:|---:|---:|
+| Jumping jacks | 2.810 | 1.762 | 2.905 |
+| Push-ups | 4.286 | 4.762 | 4.381 |
+| Squats | 2.048 | 1.429 | 2.095 |
+| Overall | 3.048 | 2.651 | 3.127 |
+
+All numbers in this second table are MAE per video/exercise. Even after aligning
+units and padding, differences are not an additive causal decomposition into
+segmentation and counting percentages: boundaries, labels, segment fragmentation,
+adaptive signal normalization, and cancellation interact. GT windows can even
+worsen aggregate count error (as for push-ups) when predicted-window extra
+counts had offset misses. Do not subtract the first table's per-segment MAE
+from a headline per-video/exercise MAE.
+
+The supplementary diagnostic verified all original test features, annotations,
+and prior result files unchanged; source hashes and the original frozen-settings
+hash are preserved in a separate local report. Production defaults and previous
+headline scores are unchanged. This remains an already-inspected synthetic test
+set with annotation-assisted pose extraction, not an untouched holdout or a
+new claim of unassisted video accuracy.
+
+Local supporting artifacts (ignored by Git):
+
+- [GT-window replay and same-unit comparison report](../../outputs/peak_improvements/gt_window_diagnostic_20261118/report.json)
+- [Verified per-GT-window counts and timestamps](../../outputs/peak_improvements/gt_window_diagnostic_20261118/gt_segments.csv)
+- [GT counts aggregated per video/exercise](../../outputs/peak_improvements/gt_window_diagnostic_20261118/gt_video_exercise.csv)
+- [Predicted-window counts with zero padding](../../outputs/peak_improvements/gt_window_diagnostic_20261118/predicted_video_exercise_zero_padding.csv)
+
+The normal `evaluate_peak_test` command below reproduces the annotated-window
+diagnostic alongside the headline. To reproduce the supplementary zero-padding
+comparison, call `evaluate(..., end_pad_s=0.0)` from Python with a new output path.
+
+### Reproduce and artifacts
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.evaluate_peak_test --out-dir outputs/peak_improvements/new_test_followup
+```
+
+Optional `--training-report`, `--baseline-report`, and `--model` select explicit
+frozen artifacts. Existing output directories are refused. The saved report
+contains model/source/input hashes and verifies test feature/annotation bytes
+are unchanged after counting. No data files or previous reports are rewritten.
+
+Local outputs (ignored by Git):
+
+- [Report and both configurations' metrics](../../outputs/peak_improvements/test_followup_20261118/report.json)
+- [Settings frozen before test inference](../../outputs/peak_improvements/test_followup_20261118/frozen_settings.json)
+- [Per-video/exercise counts and matched events](../../outputs/peak_improvements/test_followup_20261118/video_exercise.csv)
+- [Whole-video totals](../../outputs/peak_improvements/test_followup_20261118/video_totals.csv)
+- [Predicted segments and rep timestamps](../../outputs/peak_improvements/test_followup_20261118/predicted_segments.csv)
+- [GT-window diagnostic](../../outputs/peak_improvements/test_followup_20261118/oracle_segments.csv)
+
+No commits or pushes were performed for this evaluation.
+
+## Push-up view, timing, coordinate and crop diagnosis (18 November 2026)
+
+This follow-up investigates the frozen GT-window push-up failures. It does not
+change the counter, pose cache, annotations, benchmark scores, or defaults.
+Test clips are used descriptively; all spacing/smoothing/prominence/recovery
+parameter selection below uses training folds only.
+
+### Signed errors and coarse camera views
+
+Across 27 annotated test push-up source windows, 13 counts are exact, seven
+overcount and seven undercount. Total absolute error is 102 reps; two undercount
+outliers contribute 58 (56.9%). Thus the average bias (-1.78/window) hides a
+mixed error distribution concentrated in a few failures, rather than a uniform
+prominence or rate problem.
+
+Three sampled frames per source window were manually inspected for coarse
+view tags. Camera tags are observational, not calibrated geometry or causal
+proof, and each synthetic video can contain several source views.
+
+| Synthetic test video | Annotated | Predicted in GT windows | Signed error | Sampled source views |
+|---|---:|---:|---:|---|
+| synth_v2_test_0001 | 34 | 31 | -3 | front_oblique, side, side_oblique |
+| synth_v2_test_0003 | 5 | 6 | +1 | side_oblique |
+| synth_v2_test_0004 | 32 | 32 | +0 | oblique, side |
+| synth_v2_test_0006 | 40 | 48 | +8 | oblique_edited |
+| synth_v2_test_0008 | 67 | 63 | -4 | side_oblique |
+| synth_v2_test_0009 | 42 | 46 | +4 | oblique, side_multiple_panels, side_oblique |
+| synth_v2_test_0011 | 76 | 59 | -17 | side |
+| synth_v2_test_0012 | 32 | 45 | +13 | front_oblique, oblique_edited |
+| synth_v2_test_0013 | 31 | 27 | -4 | mixed_views_edited, side, side_oblique |
+| synth_v2_test_0015 | 74 | 28 | -46 | front, oblique, side_tight_crop |
+| synth_v2_test_0019 | 35 | 35 | +0 | side, side_oblique |
+
+Both largest misses are broadly side-on, not front-view examples:
+
+| Source clip | Annotated | Predicted | Selected elbow | Raw selected-elbow coverage |
+|---|---:|---:|---|---:|
+| stu9_52.mp4 | 57 | 16 | Right | 26.79% |
+| stu4_46.mp4 | 45 | 28 | Left | 66.56% |
+
+The opposite elbows have only 1.28% and 11.82% raw coverage respectively, so
+simply choosing the other arm cannot recover these cases. Low-observation
+review flags are exported rather than silently excluding failed clips. Camera
+view alone does not explain the error: edited/compound movements, subject
+selection, missing landmarks, and temporal conventions remain confounds.
+
+### Test the cadence prior on training data
+
+A minimum gap is a rejection threshold, not an assertion that the person performs
+five reps/second. Training annotation timings must be checked before replacing
+it with a universal physiological prior. With equal source-clip weighting,
+25.24% of completion gaps are below 0.7 s and 53.29% below 1.0 s. Applying those
+gaps to the annotated completion timestamps alone suppresses about 13.17% and
+28.50% of annotated reps. This benchmark's video timings cannot be replaced by
+an assumed 1.5-3 second repetition period.
+
+`validate_pushup_timing.py` tests five gaps (0.2/0.35/0.5/0.7/1.0 s), four requested
+smoothing windows (0.3/0.4/0.5/0.6 s), three prominence fractions
+(0.25/0.35/0.45), and two recovery fractions (0.5/0.7): 120 candidates on the same
+155 training push-up windows from 81 source clips. For each gap, the remaining
+settings are selected on four source-disjoint folds and scored on the fifth.
+The selected elbow and score normalization are unchanged from the current
+normalized peak family; no new coordinate signals enter this timing sweep.
+
+| Minimum spacing | Other-fold-selected MAE |
+|---|---:|
+| 0.20 s | 2.857 |
+| 0.35 s | 3.460 |
+| 0.50 s | 4.580 |
+| 0.70 s | 5.841 |
+| 1.00 s | 7.918 |
+
+The frozen normalized-family baseline (0.2 s spacing, 0.3 s smoothing, 0.45
+prominence, 0.7 recovery) has source-weighted fold MAE 2.821. Selecting from the
+whole new grid gives 2.857, not a reliable improvement. All five held-out choices
+retain 0.2 s spacing and 0.3 s smoothing; two choose 0.5 recovery instead of 0.7,
+without an overall MAE gain. No longer-spacing or smoothing change is promoted.
+This is exploratory training-data development, not an unbiased nested-CV result.
+
+### Isolated coordinate/crop pilot
+
+`extract_pushup_diagnostic.py` was run on two large training failures, two exact
+training controls, and the two largest test misses. It reads existing MP4s and
+the existing MediaPipe model but writes only new sidecars under `outputs/`.
+It refuses output paths outside that directory and never calls the canonical
+cache writer or overwrites a feature CSV, manifest, video, model, or annotation.
+
+Both passes use IMAGE-mode, stride-two inference and the largest visible pose
+box. A fixed per-window ROI is estimated from full-frame detections, expanded
+15%, clipped to the image, then resized 2x for a second pass. This differs from
+the canonical annotation-assisted subject tracker. Crop results therefore do
+not isolate tracking as the sole cause, and full-frame re-extraction itself is
+a confound. Some ROIs cover almost the full image and are effectively an
+upsampling rather than a tighter person crop.
+
+New signals are confidence-weighted shoulder height, shoulder-to-wrist vertical
+distance, and head height, normalized by a fixed median observed torso length
+per pass/window. Coordinates are mapped back to original image pixels before
+normalization. Fixed scaling avoids per-frame torso-denominator oscillations.
+Camera motion, cuts, inferred off-screen landmarks, and head movements remain
+possible artifacts. Each new signal is counted separately with the fixed
+0.2 s / 0.3 s / 0.45 / 0.7 peak configuration; no signal or settings are selected
+using the two test outcomes.
+
+Selected diagnostic examples (not a new accuracy benchmark):
+
+| Source | Existing cached count | Fresh full-frame shoulder-height count | GT |
+|---|---:|---:|---:|
+| stu9_52.mp4 | 16 | 50 | 57 |
+| stu4_46.mp4 | 28 | 47 | 45 |
+
+Fresh full-frame elbow extraction also gives 36 and 46 reps on the usable arms,
+respectively. On stu4_46, raw elbow coverage rises from 66.56% in the cache to
+99.84% in the pilot. Improvements are therefore not attributable to replacing
+elbows alone. Cropping changes those elbow counts to 39 and 57: it helps one
+case and worsens the other. In the first case the ROI spans the full image.
+The two coordinate examples also have different errors from GT; they are not
+ready to be substituted into the final pipeline.
+
+Training pilot shoulder-to-wrist counts are 64/62, 57/65, 22/23, and 45/45
+(predicted/annotated). These selected four cases only establish feasibility;
+they are not source-fold validation. The next useful experiment is to extract
+these sidecars consistently over training folds and evaluate a fixed quality
+selection rule. Do not choose the best signal per test clip by count error.
+
+### Label screening, not relabeling
+
+Ten test clips were screened using unblinded temporal contact sheets at 3 or
+6 frames/second. Five sampled cycle counts agreed; five remain ambiguous due
+to compound movements, shallow/fast motion, camera changes, or partial endpoints.
+One alternating/compound clip shows roughly nine visible bend/recovery motions
+against five annotations; this may reflect a compound-cycle convention rather
+than an erroneous label. No exact corrected count or label-noise floor is claimed.
+
+This is not a completed independent/native-frame ten-video recount. Full-speed
+review and an explicit repetition convention need independent adjudication before
+any correction. All original labels and all headline metrics are unchanged.
+The review queue and sampled evidence are preserved for that follow-up.
+
+### Reproduce and artifacts
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.validate_pushup_timing --out-dir outputs/pushup_diagnosis/new_training_timing
+.venv/Scripts/python.exe -m src.rep_counting.extract_pushup_diagnostic --cases outputs/pushup_diagnosis/pilot_cases_20261118.json --out-dir outputs/pushup_diagnosis/new_coordinate_pilot
+```
+
+The extraction command is a diagnostic pilot, not the guarded canonical pose
+extraction workflow. Reusing its outputs for a benchmark requires a separately
+versioned, consistently extracted and validated feature set.
+
+Local outputs (ignored by Git):
+
+- [Diagnosis scope and data-integrity verification](../../outputs/pushup_diagnosis/initial_20261118/diagnosis_summary.json)
+- [All 27 GT-window signed errors and camera views](../../outputs/pushup_diagnosis/initial_20261118/test_signed_errors_and_camera_view.csv)
+- [Per-video error/view aggregation](../../outputs/pushup_diagnosis/initial_20261118/test_video_signed_errors_and_views.csv)
+- [Both arms' coverage, motion and counts](../../outputs/pushup_diagnosis/initial_20261118/arm_tracking_diagnostics.csv)
+- [Low-observation review flags](../../outputs/pushup_diagnosis/initial_20261118/tracking_review_flags.csv)
+- [Training timing sweep, fold choices, cadence and hashes](../../outputs/pushup_diagnosis/timing_train_20261118/report.json)
+- [Six-case full-frame/crop pilot and limitations](../../outputs/pushup_diagnosis/coordinate_crop_pilot_20261118/report.json)
+- [All pilot signals, counts, and coverage](../../outputs/pushup_diagnosis/coordinate_crop_pilot_20261118/pilot_results.csv)
+- [Ten-clip sampled label screen](../../outputs/pushup_diagnosis/initial_20261118/ten_clip_label_screen.csv)
+
+Original training/test feature and annotation hashes, and pilot video/model
+hashes, were verified unchanged. No production settings or published test scores
+were updated. No commits or pushes were performed.
+
+## Consistent training coordinate sidecars (18 November 2026)
+
+`extract_coordinate_training.py` applies one frozen full-frame protocol to all
+155 annotated training push-up windows from 81 source clips across five folds.
+MediaPipe IMAGE mode evaluates every second original frame, allows two poses,
+and selects the largest visible-landmark bounding box independently per frame.
+No crops or test frames are used. This differs from the canonical annotation-
+assisted tracker and can switch people; it is an experimental feature set.
+
+Sidecars preserve original frame/time coordinates, raw pixel landmarks and
+visibility, plus shoulder height, shoulder-to-wrist height, nose height, both
+elbow angles, and confidence-weighted elbows. Heights use a fixed per-window
+median torso scale. Missing observations remain missing. The signed heights
+are oriented so extension is high and a bend/recovery is one completed rep.
+
+Plans freeze input/model/code hashes and every expected window. Outputs must
+stay under `outputs/`; existing sidecars require explicit `--resume` and exact
+provenance/checksum matches. Completion verifies canonical inputs unchanged.
+The validator rejects incomplete sets, changed inputs, frame misalignment,
+test cases, and source overlap across folds. Unusable signals count zero;
+no difficult windows are excluded.
+
+`coordinate_counter.py` is an opt-in offline counter. It masks confidence below
+0.5, interpolates only short gaps, applies Savitzky-Golay smoothing and robust
+standardization, then detects peaks without autocorrelation-guided spacing.
+Candidates include six individual signals, a count-free quality selector,
+fresh-elbow-only quality selection, and median voting across shoulder height,
+shoulder-to-wrist height and weighted elbows. Median voting returns a real
+candidate timeline and falls back to quality selection if any voter is unusable.
+Quality weights are fixed: visibility 2, continuity 1, periodicity 4.
+
+The training search crosses smoothing 0.3/0.5 s, spacing 0.2/0.35/0.5 s,
+prominence 0.25/0.35/0.45 of robust amplitude, and recovery 0.5/0.7, with width
+1/15 s: 36 settings per family, 324 candidates overall. Each fold is scored
+using settings selected on the other four folds. MAE weights source clips
+equally within each fold, then folds equally. The previous peak result,
+canonical fixed elbows, fresh elbows through the identical old counter path,
+and fresh elbows with the new quality-ranking path are separate baselines.
+These are exploratory development checks on GT exercise windows,
+not final-test results or unbiased nested CV. Whole-window normalization and
+pose extraction are offline; production counter defaults remain unchanged.
+
+```powershell
+.venv/Scripts/python.exe -m src.rep_counting.extract_coordinate_training --out-dir outputs/pushup_coordinates/train_v1_20261118 --workers 2
+# Only for resuming/verifying exactly the same frozen extraction:
+.venv/Scripts/python.exe -m src.rep_counting.extract_coordinate_training --out-dir outputs/pushup_coordinates/train_v1_20261118 --workers 2 --resume
+.venv/Scripts/python.exe -m src.rep_counting.validate_coordinate_training --sidecars outputs/pushup_coordinates/train_v1_20261118 --out-dir outputs/pushup_coordinates/train_v1_validation_20261118
+```
+
+### Completed training results
+
+All 155 windows completed and passed alignment/provenance checks. Verified
+resume found 155 valid sidecars and zero pending windows. Canonical videos,
+annotations, feature caches, model and manifests passed unchanged-hash checks;
+the validator also verified sidecars and reference results unchanged.
+
+| Comparison | Source-weighted fold MAE | Timing F1 | Active videos within +/-1 |
+|---|---:|---:|---:|
+| Previous other-fold-selected peaks | 2.827 | 0.8910 | 29.23% |
+| Canonical elbows, fixed normalized counter | 2.821 | 0.8912 | 29.23% |
+| Fresh elbows, identical old counter path | 2.471 | 0.9045 | 35.38% |
+| Fresh elbows, new fixed quality-ranking path | 2.477 | 0.9047 | 36.92% |
+| Family + parameters selected on other folds | 2.850 | 0.9188 | 40.00% |
+| Median family, parameters selected on other folds | 1.940 | 0.9382 | 44.62% |
+
+The broad family search does **not** improve count MAE: it selects quality on
+folds 0-2 and shoulder height on folds 3-4, with held-out MAEs 2.625, 2.500,
+2.219, 2.938 and 3.969. Its active-video MAE also worsens from 4.662 to 6.400,
+despite improved timing F1 and within-one rate. Do not replace that score with
+the best family after inspecting held-out results.
+
+Exact and within-one count comparisons (unweighted synthetic occurrences;
+within-one includes exact matches):
+
+| Method | Exact windows /155 | Windows within +/-1 /155 | Exact active videos /65 | Active videos within +/-1 /65 |
+|---|---:|---:|---:|---:|
+| Previous other-fold-selected peaks | 52 (33.55%) | 72 (46.45%) | 9 (13.85%) | 19 (29.23%) |
+| Canonical fixed elbows | 52 (33.55%) | 72 (46.45%) | 9 (13.85%) | 19 (29.23%) |
+| Fresh elbows, identical old counter | 56 (36.13%) | 81 (52.26%) | 11 (16.92%) | 23 (35.38%) |
+| Fresh elbows, fixed new quality path | 55 (35.48%) | 81 (52.26%) | 11 (16.92%) | 24 (36.92%) |
+| Broad other-fold selection | 76 (49.03%) | 100 (64.52%) | 14 (21.54%) | 26 (40.00%) |
+| Median family, other-fold parameters | 83 (53.55%) | 100 (64.52%) | 17 (26.15%) | 29 (44.62%) |
+
+Window scores compare each annotated push-up window independently. Video
+scores first sum all push-up window counts per video; errors can cancel.
+The 65-video denominator includes only videos containing annotated push-ups,
+avoiding credit for the 55 exercise-absent videos. These percentages do not
+use the source weighting of the fold-MAE column.
+
+Per-family development results (parameters selected on other folds):
+
+| Family | MAE |
+|---|---:|
+| Median: shoulder, wrist-relative, weighted elbow | 1.940 |
+| Head height | 2.058 |
+| Shoulder-to-wrist height | 2.095 |
+| Count-free quality selection across six signals | 2.194 |
+| Shoulder height | 2.424 |
+| Fresh elbow-only quality selection | 2.633 |
+| Confidence-weighted elbows | 3.363 |
+| Left elbow alone | 7.796 |
+| Right elbow alone | 8.615 |
+
+Median is the most promising family in this development comparison (31.4%
+lower source-weighted MAE than previous peaks). Its held-out MAEs are 1.688,
+2.324, 1.531, 2.406 and 1.750; all five choose 0.5 s smoothing, 0.2 s spacing,
+0.5 recovery, and prominence 0.25 or 0.35. Segment exact/within-one rates are
+53.55%/64.52%; active-video MAE is 4.292 over 65 videos. Selecting this family
+after seeing these scores introduces development-selection optimism; no new
+test claim or production promotion follows.
+
+The all-training search chooses quality, 0.3 s smoothing, 0.2 s spacing,
+0.45 prominence, 0.5 recovery and 1/15 s width. Its **in-sample** MAE is 1.690,
+not a held-out estimate. This gap is further evidence against reporting the
+best all-training grid score as generalization performance.
+
+Mean raw/cleaned coverage across window occurrences is 94.18%/98.56% for
+shoulder height, 92.09%/97.56% for wrist-relative height, and 94.05%/98.48%
+for head height. All pass usability guards in 155/155 windows. Individual
+elbows pass in only 106/155 (left) and 102/155 (right); weighted elbows pass in
+151/155. Confidence and amplitude guards still apply, and model visibility
+does not prove correct person identity or tracking accuracy.
+
+MAE is source-weighted within folds; timing pools synthetic occurrences with
+the existing 0.3 s matching tolerance. Active-video percentages aggregate all
+push-up GT windows per video and exclude the 55 videos without push-ups. They
+are different units from segment/source MAE. The report also retains the full
+120-video denominator, including exercise-absent zeros.
+
+Artifacts (local, ignored by Git):
+
+- [Frozen extraction plan](../../outputs/pushup_coordinates/train_v1_20261118/plan.json)
+- [Completed extraction and integrity report](../../outputs/pushup_coordinates/train_v1_20261118/extraction_report.json)
+- [Fold comparison, settings, hashes and environment](../../outputs/pushup_coordinates/train_v1_validation_20261118/report.json)
+- [Every candidate and per-fold score](../../outputs/pushup_coordinates/train_v1_validation_20261118/candidates.csv)
+- [Per-window signal coverage and quality](../../outputs/pushup_coordinates/train_v1_validation_20261118/signal_coverage.csv)
+- [Other-fold-selected predictions](../../outputs/pushup_coordinates/train_v1_validation_20261118/heldout_predictions.csv)
+- [Per-family held-out predictions](../../outputs/pushup_coordinates/train_v1_validation_20261118/family_heldout_predictions.csv)
+- [Comparison plot](../../outputs/pushup_coordinates/train_v1_validation_20261118/comparison.png)
+
+All 246 tests pass; the six coordinate tests also pass after final validator
+updates. No test video/feature inference, canonical writes, commits or pushes
+were performed by this experiment.
